@@ -14,8 +14,8 @@
 4. **Dois produtos, um código-base de UI:**
    - *focusbar leve* (metadados, sem gravar tela) → uso compartilhado / chefe.
    - *Assistente pessoal* (captura total + IA nuvem) → uso do Petrus (TDAH).
-5. **IA na nuvem é OK** (quer o assistente mais inteligente possível), **mas com porteiro local**
-   filtrando o que sai.
+5. **IA 100% local** (Llama via Ollama). **Nada vai pra nuvem.** Privacidade total e custo zero.
+   Trade-off honesto: no M1 8GB o modelo é modesto (3B), não gênio — ver Seção 10.
 6. **Proatividade é um MODO** que troca no momento, não um ajuste fixo.
 7. **A IA não define tarefas** — no máximo sugere. Ela observa a *execução*.
 
@@ -62,17 +62,17 @@ Todo o resto deriva disso.
                 │  API local + MCP (screenpipe-mcp)
                 ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  PORTEIRO LOCAL (modelo pequeno na máquina)                 │
-│  zonas de exclusão · redação extra · decide o que pode subir │
+│  PORTEIRO LOCAL (regras + Llama 3.2 3B)                     │
+│  zonas de exclusão · redação · efemeridade                   │
 └───────────────┬─────────────────────────────────────────────┘
                 ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  MEMÓRIA (4 camadas destiladas)                             │
+│  MEMÓRIA (4 camadas destiladas — SQLite nosso, ao lado)     │
 │  bruto → episódios → semântico/loops → autoconhecimento      │
 └───────────────┬─────────────────────────────────────────────┘
                 ▼
 ┌─────────────────────────────────────────────────────────────┐
-│  ASSISTENTE (IA forte na nuvem — só toca no destilado/limpo) │
+│  ASSISTENTE (Llama 3.2 3B LOCAL — só toca no destilado/limpo)│
 │  ritual diário · loops abertos · sugestões · resumos         │
 └───────────────┬─────────────────────────────────────────────┘
                 ▼
@@ -82,8 +82,10 @@ Todo o resto deriva disso.
 └─────────────────────────────────────────────────────────────┘
 ```
 
-Regra de ouro: **a IA forte nunca toca no dado cru.** Só recebe o que o porteiro já
-limpou e o que a destilação já resumiu. Isso resolve **custo** e **privacidade** ao mesmo tempo.
+Regra de ouro: **o modelo nunca toca no dado cru.** Só recebe o que as regras já
+limparam e o que a destilação já resumiu. Num modelo 3B isso não é luxo — é o que
+torna ele **útil** (3B só raciocina bem sobre entradas pequenas e limpas) e **leve**
+(cabe nos 8GB).
 
 ---
 
@@ -109,13 +111,14 @@ Defesa em camadas, do mais forte pro mais fraco:
    gerenciador de senhas, telas de banco, portais de saúde, apps de mensagem íntima.
    *Nem entra no banco.* Configurar isso é a **primeira** coisa.
 2. **Redação na entrada** — senha, token, 2FA, cartão, CPF: apagados **antes de armazenar**.
-3. **Porteiro decide o que sobe** — regra-mãe: **na dúvida, fica local.** O default é privado;
-   você *opta* por mandar algo específico pra nuvem.
+3. **Tudo fica local** — como não há nuvem, não existe "o que pode sair". O porteiro aqui
+   só controla **o que o modelo local lê** (nunca zonas de exclusão) e a redação.
 4. **Efemeridade** — o que for sensível e escapar é descartado rápido. Meta não é perfeição
    (um código vai piscar na tela uma hora), é vazamento **raro e de vida curta**.
 
 > Honestidade: nada disso é 100%. O OCR vai pegar algo que não devia uma hora. Por isso
-> camada 4 existe — o risco não se acumula.
+> camada 4 existe — o risco não se acumula. Como **nada sai da máquina**, o pior caso já é
+> contido por design.
 
 ---
 
@@ -184,14 +187,25 @@ preguiça, é **travar ligado e esquecer o corpo até desabar**. O sistema otimi
 
 ---
 
-## 10. Stack de IA (local pequeno + nuvem forte)
+## 10. Stack de IA — 100% local, grátis e leve (M1 8GB)
 
-- **Modelo local pequeno** (ex.: via Ollama, 3–8B): porteiro + destilação bruto→episódio.
-  Roda o tempo todo, de graça, privado. Nunca manda nada pra fora.
-- **Modelo forte na nuvem** (Claude etc.): o assistente que raciocina — ritual diário,
-  loops, resumos, sugestões. Só recebe o **destilado e limpo**.
-- **Por que isso controla custo:** mandar captura 24/7 crua pro modelo forte seria caro e lento.
-  A destilação local reduz 99% do volume antes de chegar na nuvem.
+**Hardware real:** Apple M1, **8GB RAM**, 8 núcleos. Esse é o teto que manda em tudo.
+Screenpipe (0,5–3GB) + modelo (2–5GB) + macOS (3–4GB) **não cabem juntos** em 8GB.
+Então a regra é: **nada roda o tempo todo ao mesmo tempo.**
+
+- **Modelo único: `Llama 3.2 3B`** (via Ollama, quantizado Q4 ≈ 2GB). Free, roda no M1.
+  Faz: destilação bruto→episódio, extração de loops, resumo do dia. **Não é Claude** —
+  por isso só recebe entradas pequenas e limpas (as regras fazem o trabalho bruto).
+- **Carregar sob demanda, não 24/7:** o modelo só sobe quando precisa (destilação a cada
+  ~15min; rituais de manhã/tarde) e o Ollama descarrega da RAM depois (`keep_alive` curto).
+  Assim a RAM fica livre pro Screenpipe + teu trabalho na maior parte do tempo.
+- **Regras antes de modelo:** categorias, foco, idle, alertas (já prontos no focusbar) são
+  determinísticos, instantâneos, custo zero de RAM. O Llama entra **só** no que regra não resolve.
+- **Captura em perfil leve:** começar o Screenpipe sem áudio contínuo / menos frames, medir,
+  e só então decidir subir. Em 8GB, captura total + modelo é o cenário mais arriscado.
+
+> Caminho de upgrade: se um dia você tiver mais RAM (ou aceitar nuvem), troca-se o 3B por
+> um modelo maior (8B+) ou por uma API — **sem mexer no resto da arquitetura**.
 
 ---
 
@@ -227,9 +241,14 @@ como a humana — você quer o significado, não o pixel).
 
 ---
 
-## 14. Decisões ainda em aberto
+## 14. Decisões
 
-- Quais apps/domínios entram na **zona de exclusão dura** inicial (lista tua).
-- Quem é o **modelo local** do porteiro (Ollama qual modelo) e qual a **nuvem** (Claude API?).
-- Horário do **ritual diário** (manhã/fim de tarde) e gatilhos de auto-detecção de modo.
-- Onde mora o **banco da camada de sentido**: dentro do SQLite do Screenpipe ou um nosso ao lado.
+**Fechadas:**
+- **Modelo:** `Llama 3.2 3B` local (Ollama), carregado sob demanda. Sem nuvem.
+- **Banco da camada de sentido:** SQLite **nosso, ao lado** do Screenpipe (desacoplado).
+- **Ritual diário:** manhã na 1ª atividade do dia; debrief ~18h (ajustável).
+- **Captura:** Screenpipe em perfil leve primeiro, medir antes de subir.
+
+**Ainda só você responde (input pessoal):**
+- Lista da **zona de exclusão dura**: qual **gerenciador de senha** e qual **banco** você usa,
+  + apps/sites que nunca podem ser lidos. (Isso vem antes de ligar a captura.)
