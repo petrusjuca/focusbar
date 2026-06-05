@@ -1,254 +1,254 @@
-# focusbar → Assistente Pessoal (TDAH) sobre Screenpipe
+# focusbar → Assistente Pessoal (TDAH) sobre Screenpipe — v2
 
-> Blueprint de filosofia e arquitetura. **Decidir bem antes de programar.**
-> Status: design. Nada aqui é código ainda.
+> **Focusbar transforma seu computador em um assistente de IA que sabe tudo que
+> você fez e pode agir em cima disso.** Usa o Screenpipe open-source como base.
+> É bom de um jeito que TE ajuda e dá vontade de usar — e pode ser customizado
+> pra usos específicos seus. Algo que nenhum outro app te entrega.
 
-## TL;DR — decisões já tomadas
+> Blueprint de filosofia e arquitetura. **Decidir bem antes de programar.** Sem código ainda.
 
-1. **Não reconstruir o gravador.** O Screenpipe roda **por baixo** como motor de
-   captura (tela + OCR + áudio/Whisper + redação). A gente constrói **só a camada de sentido**.
-2. **Integração sem fork:** consumir o Screenpipe pela **API local + MCP** (`screenpipe-mcp`),
-   não modificando o repo dele. Código que mantemos = pequeno e nosso.
-3. **Reaproveitar o focusbar:** a casca (Tauri + React), dashboard, coach, lembretes
-   e categorias viram a UI deste assistente.
-4. **Dois produtos, um código-base de UI:**
-   - *focusbar leve* (metadados, sem gravar tela) → uso compartilhado / chefe.
-   - *Assistente pessoal* (captura total + IA nuvem) → uso do Petrus (TDAH).
-5. **IA 100% local** (Llama via Ollama). **Nada vai pra nuvem.** Privacidade total e custo zero.
-   Trade-off honesto: no M1 8GB o modelo é modesto (3B), não gênio — ver Seção 10.
-6. **Proatividade é um MODO** que troca no momento, não um ajuste fixo.
-7. **A IA não define tarefas** — no máximo sugere. Ela observa a *execução*.
+## Filosofia (a alma do produto)
+
+- *"Aquilo que você lembra, você pode agir em cima."*
+- *"Você não pode agir em cima de achismo, apenas de dados."*
+- *"Quanto mais informação você tiver, mais você pode melhorar algo."*
+- *"O objetivo não é nos levar ao limite da tortura, e sim fazer mais e melhor em
+  menos tempo — pra sobrar tempo pra outras coisas também."*
+
+---
+
+## 0. TL;DR — decisões tomadas
+
+1. **Não reconstruir o gravador.** Screenpipe roda **por baixo** (tela + OCR + Whisper + redação).
+   Integração **sem fork**, via **API local + MCP**.
+2. **Reaproveitar o focusbar** (Tauri + React, dashboard, coach, lembretes) como UI.
+3. **IA em dois níveis:**
+   - **Local pequeno** (`Llama 3.2 3B`) — filtra/limpa o bruto, destila episódios. Nunca sai da máquina.
+   - **SOTA via custo fixo/grátis** — **Claude (Max) por MCP** + opcional **Gemini grátis**.
+     **Sem API medida** (custo imprevisível). Só recebe o **destilado e limpo**.
+4. **Armazenamento local.** Bruto no Screenpipe; camada de sentido em SQLite **nosso, ao lado**.
+5. **Proatividade é MODO** (Foco / Companheiro / Dia ruim), troca no momento.
+6. **A IA não define tarefas** — observa execução, no máximo sugere.
+7. **Orçamento de tempo: ≤ 10 min/dia** de interação, num período só (pedido do chefe).
 
 ---
 
 ## 1. A virada conceitual
 
-Isto **não é vigilância de si mesmo** (painel que te julga → veneno pra TDAH, aciona
-disforia sensível à rejeição e morre em 2 semanas).
-
-Isto é uma **função executiva externa**. Memória de trabalho, senso de tempo e
-iniciação de tarefa são as 3 coisas que o TDAH sabota — e as 3 que essa arquitetura
-terceiriza. O software é a parte do teu cérebro que **não fica online de forma confiável**.
-Todo o resto deriva disso.
+Isto **não é vigilância de si mesmo** (painel que te julga → veneno pra TDAH, morre em 2 semanas).
+É uma **função executiva externa**: memória de trabalho, senso de tempo e iniciação de tarefa
+— as 3 coisas que o TDAH sabota e que essa arquitetura terceiriza. O software é a parte do teu
+cérebro que **não fica online de forma confiável**.
 
 ---
 
 ## 2. Os 5 princípios
 
-1. **Captura sem fricção, lembrança com curadoria.** Você nunca alimenta o sistema na mão.
-   Mas 99% do capturado é ruído — a inteligência está no que ele **traz à tona**, não no que grava.
-   *Captura é commodity; curadoria é o produto.*
-2. **"Fora da vista, fora da mente" — invertido.** Ele re-materializa intenções que evaporaram
-   ("ah, eu ia fazer aquilo" das 10h que sumiu às 10h03).
-3. **Não-punitivo por padrão, sempre.** Nunca "você perdeu 2h no YouTube". Sempre
-   "notei que você travou depois do almoço — retomar de onde parou ou começar leve?".
-   Tom é **arquitetura**, não enfeite — define se você ainda usa em 3 meses.
-4. **Esquecer é feature.** O bruto de hoje é detalhado; o de uma semana vira episódio resumido;
-   o de um mês vira só padrão. Você quase nunca quer o pixel de terça — quer "terça você travou em X".
+1. **Captura sem fricção, lembrança com curadoria.** Você nunca alimenta na mão. 99% é ruído —
+   a inteligência está no que ele **traz à tona**. *Captura é commodity; curadoria é o produto.*
+2. **"Fora da vista, fora da mente" — invertido.** Re-materializa intenções que evaporaram.
+3. **Não-punitivo por padrão.** Nunca "você perdeu 2h no YouTube". Sempre "travou depois do
+   almoço — retomar ou começar leve?". Tom é arquitetura.
+4. **Esquecer é feature.** Bruto de hoje detalhado; semana vira episódio; mês vira padrão.
 5. **À prova de TDAH (meta-princípio).** Se manter a ferramenta exigir função executiva, ela morre.
-   Zero manutenção, auto-organizável, tolerante a buracos. Sumiu 3 dias? Ela continua de onde dá,
-   **sem tela de culpa**.
+   Zero manutenção, auto-organizável, tolerante a buracos. Sumiu 3 dias? Continua, **sem culpa**.
+   Você **não** liga/desliga nem nomeia tarefa — ele faz isso.
 
 ---
 
-## 3. Arquitetura em camadas
+## 3. Arquitetura
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│  SCREENPIPE (motor de captura — roda de fundo)              │
-│  tela (eventos) · OCR/árvore de acessibilidade · áudio       │
-│  (Whisper) · redação na origem · SQLite local + busca FTS    │
-└───────────────┬─────────────────────────────────────────────┘
-                │  API local + MCP (screenpipe-mcp)
+┌──────────────────────────────────────────────────────────────┐
+│  SCREENPIPE (motor de captura — de fundo)                    │
+│  tela · OCR · áudio/Whisper · redação na origem · SQLite/FTS  │
+└───────────────┬──────────────────────────────────────────────┘
+                │  API local + MCP
                 ▼
-┌─────────────────────────────────────────────────────────────┐
-│  PORTEIRO LOCAL (regras + Llama 3.2 3B)                     │
-│  zonas de exclusão · redação · efemeridade                   │
-└───────────────┬─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  FILTRO LOCAL — Llama 3.2 3B (na máquina)                    │
+│  tira senha/2FA/cartão/CPF · zonas de exclusão · destila      │
+│  → na dúvida, FICA LOCAL                                       │
+└───────────────┬──────────────────────────────────────────────┘
                 ▼
-┌─────────────────────────────────────────────────────────────┐
-│  MEMÓRIA (4 camadas destiladas — SQLite nosso, ao lado)     │
-│  bruto → episódios → semântico/loops → autoconhecimento      │
-└───────────────┬─────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  MEMÓRIA — 4 camadas (SQLite nosso, ao lado)                 │
+│  bruto → episódios → loops abertos → autoconhecimento         │
+└───────────────┬──────────────────────────────────────────────┘
+                ▼ (só o destilado e limpo)
+┌──────────────────────────────────────────────────────────────┐
+│  CÉREBRO SOTA — custo fixo/grátis                            │
+│  Claude (Max) via MCP · Gemini grátis (auto)                  │
+│  análise do dia · insights elaborados · debrief               │
+└───────────────┬──────────────────────────────────────────────┘
                 ▼
-┌─────────────────────────────────────────────────────────────┐
-│  ASSISTENTE (Llama 3.2 3B LOCAL — só toca no destilado/limpo)│
-│  ritual diário · loops abertos · sugestões · resumos         │
-└───────────────┬─────────────────────────────────────────────┘
-                ▼
-┌─────────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────────┐
 │  UI (focusbar — Tauri + React)                              │
-│  dashboard · modos · debrief · chat com o assistente         │
-└─────────────────────────────────────────────────────────────┘
+│  dashboard · captura rápida · modos · debrief · chat          │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-Regra de ouro: **o modelo nunca toca no dado cru.** Só recebe o que as regras já
-limparam e o que a destilação já resumiu. Num modelo 3B isso não é luxo — é o que
-torna ele **útil** (3B só raciocina bem sobre entradas pequenas e limpas) e **leve**
-(cabe nos 8GB).
+**Regra de ouro:** o cérebro SOTA **nunca toca no bruto** — só no que o filtro local limpou e a
+destilação resumiu. Isso resolve **privacidade** (raw nunca sai) e **custo** (volume mínimo) de uma vez.
 
 ---
 
 ## 4. As 4 camadas de memória
 
-| Camada | O que é | Quem produz | Cadência |
-|---|---|---|---|
-| **Bruto** | Eventos com timestamp, texto de tela, transcrições | Screenpipe | contínuo |
-| **Episódios** | Blocos com sentido: "9h10–10h45 codando auth, 3 interrupções" | modelo **local** | a cada ~10–15min |
-| **Semântico / loops** | Compromissos, intenções, coisas começadas e largadas | local + nuvem | ao fechar episódio + no debrief |
-| **Autoconhecimento** | Ritmos de energia, onde você trava, quando o hiperfoco pega | nuvem (longo prazo) | semanal |
+| Camada | O que é | Quem produz |
+|---|---|---|
+| **Bruto** | Eventos, texto de tela, transcrições | Screenpipe |
+| **Episódios** | "9h10–10h45 codando auth, 3 interrupções" | Llama 3.2 3B (local) |
+| **Loops abertos** | Compromissos, intenções, coisas largadas | local + SOTA |
+| **Autoconhecimento** | Ritmos de energia, onde trava, padrão pós-almoço | SOTA (longo prazo) |
 
-A maior parte do **valor pro TDAH** está na camada de **episódios** (transforma borrão
-de tempo em narrativa recuperável) e na **semântica/loops** (o detector de laços abertos).
+O maior valor pro TDAH está em **episódios** (borrão → narrativa) e **loops abertos**.
 
 ---
 
 ## 5. Porteiro de privacidade (inegociável)
 
-Defesa em camadas, do mais forte pro mais fraco:
-
-1. **Zonas de exclusão dura** — apps/domínios que **nunca** são nem lidos. Padrão inicial:
-   gerenciador de senhas, telas de banco, portais de saúde, apps de mensagem íntima.
-   *Nem entra no banco.* Configurar isso é a **primeira** coisa.
-2. **Redação na entrada** — senha, token, 2FA, cartão, CPF: apagados **antes de armazenar**.
-3. **Tudo fica local** — como não há nuvem, não existe "o que pode sair". O porteiro aqui
-   só controla **o que o modelo local lê** (nunca zonas de exclusão) e a redação.
-4. **Efemeridade** — o que for sensível e escapar é descartado rápido. Meta não é perfeição
-   (um código vai piscar na tela uma hora), é vazamento **raro e de vida curta**.
-
-> Honestidade: nada disso é 100%. O OCR vai pegar algo que não devia uma hora. Por isso
-> camada 4 existe — o risco não se acumula. Como **nada sai da máquina**, o pior caso já é
-> contido por design.
+1. **Zonas de exclusão dura** — apps/sites **nunca** lidos (gerenciador de senha, banco, saúde).
+   *Nem entram no banco.* Primeira coisa a configurar.
+2. **Redação na entrada** — senha, token, 2FA, cartão, CPF: apagados antes de armazenar.
+3. **Filtro decide o que sobe** — regra-mãe: **na dúvida, fica local.** Só o destilado/limpo vai
+   pro cérebro SOTA.
+4. **Efemeridade** — sensível que escapar é descartado rápido. Meta: vazamento raro e de vida curta.
 
 ---
 
-## 6. Detector de loops abertos (a joia da coroa)
+## 6. Detector de loops abertos + intenções com prazo (a joia)
 
-Provavelmente o **subsistema mais importante** do software inteiro. Extrai e devolve
-"coisas que você disse que ia fazer e o TDAH apagou".
+Subsistema mais importante. "Nunca mais esquecer algo — nem anotação sem ação."
 
-- **Fontes:** o que você falou numa call/áudio (Whisper), num chat, num e-mail;
-  o que você começou e largou; projetos recorrentes; pessoas esperando retorno.
-- **Como extrai:** a camada semântica roda LLM sobre os episódios procurando
-  compromissos ("vou mandar X", "preciso responder Y", "depois eu faço Z").
-- **Como devolve (pró-TDAH):** por **reconhecimento, não memória**. Ele mostra
-  "acho que ficou pendente: A, B, C — confere?" e você corrige com um toque.
-  Reconhecer é muito mais fácil que lembrar do zero.
-- **Estados:** aberto · adiado (snooze) · feito · descartado. Nada cobra; tudo é sugestão.
+- **Fontes:** o que você falou numa call/áudio (Whisper), num chat, num e-mail; o que começou
+  e largou; projetos recorrentes; pessoas esperando retorno.
+- **Intenção com prazo:** "quero terminar isso até 10h30" — você anota (ou o Whisper pega).
+  Se não terminar, ele lembra **na hora (10h30)** ou guarda pro **debrief de fim de dia**.
+- **Como devolve (pró-TDAH):** por **reconhecimento, não memória** — "ficou pendente A, B, C —
+  confere?". Reconhecer é mais fácil que lembrar.
+- **Estados:** aberto · adiado · feito · descartado. Nada cobra; tudo é sugestão.
 
 ---
 
-## 7. O ciclo diário (o coração do "me ajudar a melhorar")
+## 7. Captura rápida (quick-capture)
 
-Dois momentos curtos, **opt-in**, à prova de abandono:
+Quer anotar algo? Joga no app **sem formatar nada**. Ele **digere e arquiva certo**:
+- É uma atividade? → vira **tarefa** (com prazo, se houver).
+- É uma ideia/nota? → vai pro lugar certo, ligada ao contexto do momento.
+- Pode ser por texto ou voz (Whisper já está capturando).
 
-**Manhã — declarar intenção (≤ 1 min):**
-- Ele mostra os loops abertos + o que ficou de ontem.
-- Você escolhe 1–3 intenções do dia (ou só confirma as sugeridas). **Um toque.**
-- Não vira lista de 200 itens — só o "norte" de hoje.
-
-**Fim de tarde — debrief (2–3 min):**
-- Cruza **intenção × execução × tempo/energia**: o que saiu, o que não, e o custo real.
-- Tom gentil e **grosso, não minucioso**: aponta o óbvio caro ("3h numa tarefa de 30min
-  porque ficou alternando com 5 coisas"), não caça 4 minutos perdidos.
-- Termina com **1 melhoria pequena** pra amanhã, não um relatório.
-
-Regra anti-abandono: o debrief **sempre roda** (independe de modo). Se você sumir,
-ele resume o período e segue — sem culpa.
+Zero fricção: o trabalho de organizar é da IA, não seu.
 
 ---
 
-## 8. Proatividade como MODO (não ajuste fixo)
+## 8. O ciclo diário (≤ 10 min/dia, num período só)
 
-O TDAH oscila entre "me ajuda" e "me deixa em paz" no mesmo dia. Três modos:
+Restrição dura (pedido do chefe): a interação ativa **não passa de ~10 min/dia**, concentrada.
 
-- **Foco / Não perturbe** — captura continua, saída proativa vai a **zero**. O que ele
-  notaria fica numa fila silenciosa pra depois.
-- **Companheiro** — traz loops à tona, devolve contexto após interrupção, sugere próximo passo.
-- **Dia ruim / baixa energia** — extra-gentil: faz mais do trabalho pesado, sugere só o
-  **menor próximo passo possível**, segura qualquer cobrança.
+**Manhã — intenção (≤ 1 min):** mostra loops abertos + o de ontem; você escolhe 1–3 nortes
+do dia (ou confirma os sugeridos). Um toque.
 
-Críticos:
-- **Troca de modo com fricção quase zero** (um atalho/toque). Se der trabalho, você esquece.
-- **O sistema detecta e oferece** o modo ("parece foco profundo — fico quieto?").
-- **Modo Foco decai com segurança** — expira sozinho ou o debrief sempre roda; senão o
-  "não perturbe" engole o dia inteiro.
-- **Decisão fechada:** no modo Foco, **só alertas estritamente físicos furam** (ex.: 3h sem
-  pausa/água). O resto fica mudo. (É quando o hiperfoco mais esquece o corpo.)
+**Fim de tarde — debrief (≤ 8 min):** cruza **intenção × execução × tempo/energia**. Tom gentil,
+**grosso, não minucioso** (aponta o óbvio caro, não caça 4 min perdidos). Termina com **1 melhoria**
+pra amanhã. O debrief **sempre roda** (independe de modo) — anti-abandono.
 
 ---
 
-## 9. Descanso como cidadão de primeira classe
+## 9. Modos de proatividade + política de notificação
 
-Não é "lembrete de pausa" genérico — é **contrapeso ao hiperfoco**. O padrão TDAH não é
-preguiça, é **travar ligado e esquecer o corpo até desabar**. O sistema otimiza pra
-**funcionamento sustentável**, não output bruto. Ele tem permissão de te tirar do hiperfoco
-**mesmo quando está rendendo**, porque sabe (autoconhecimento) o que vem depois do colapso.
+**Modos** (troca com fricção quase zero; o sistema detecta e oferece):
+- **Foco / Não perturbe** — saída proativa **zero**. Bom pro hiperfoco.
+- **Companheiro** (padrão) — entrega o que for necessário: loops, contexto, próximo passo.
+- **Dia ruim / baixa energia** — extra-gentil: faz o trabalho pesado, sugere o **menor próximo
+  passo**, segura cobrança.
 
----
-
-## 10. Stack de IA — 100% local, grátis e leve (M1 8GB)
-
-**Hardware real:** Apple M1, **8GB RAM**, 8 núcleos. Esse é o teto que manda em tudo.
-Screenpipe (0,5–3GB) + modelo (2–5GB) + macOS (3–4GB) **não cabem juntos** em 8GB.
-Então a regra é: **nada roda o tempo todo ao mesmo tempo.**
-
-- **Modelo único: `Llama 3.2 3B`** (via Ollama, quantizado Q4 ≈ 2GB). Free, roda no M1.
-  Faz: destilação bruto→episódio, extração de loops, resumo do dia. **Não é Claude** —
-  por isso só recebe entradas pequenas e limpas (as regras fazem o trabalho bruto).
-- **Carregar sob demanda, não 24/7:** o modelo só sobe quando precisa (destilação a cada
-  ~15min; rituais de manhã/tarde) e o Ollama descarrega da RAM depois (`keep_alive` curto).
-  Assim a RAM fica livre pro Screenpipe + teu trabalho na maior parte do tempo.
-- **Regras antes de modelo:** categorias, foco, idle, alertas (já prontos no focusbar) são
-  determinísticos, instantâneos, custo zero de RAM. O Llama entra **só** no que regra não resolve.
-- **Captura em perfil leve:** começar o Screenpipe sem áudio contínuo / menos frames, medir,
-  e só então decidir subir. Em 8GB, captura total + modelo é o cenário mais arriscado.
-
-> Caminho de upgrade: se um dia você tiver mais RAM (ou aceitar nuvem), troca-se o 3B por
-> um modelo maior (8B+) ou por uma API — **sem mexer no resto da arquitetura**.
+**Notificações — silencioso e suave por padrão:**
+- Ele "fala" só em 3 casos: (1) quando perguntado, (2) momentos agendados (manhã/debrief),
+  (3) interrupções necessárias (levantar, beber água).
+- **Som leve só nesses importantes** (pra não passar batido). **Notificações menores: sem som.**
+- No modo Foco, **só o estritamente físico fura** (ex.: 3h sem pausa). O resto fica mudo.
+- **Modo Foco decai com segurança** (expira ou o debrief sempre roda) — não engole o dia.
 
 ---
 
-## 11. Política de esquecimento (aging)
+## 10. Descanso como cidadão de primeira classe
 
-- **Hoje:** bruto detalhado.
-- **~1 semana:** vira episódios resumidos (bruto descartável).
-- **~1 mês:** vira só padrões/autoconhecimento.
-
-Benefício duplo: **privacidade** (risco não acumula) + **peso mental** (a memória envelhece
-como a humana — você quer o significado, não o pixel).
+Contrapeso ao hiperfoco. O padrão TDAH não é preguiça — é travar ligado e esquecer o corpo até
+desabar. O sistema otimiza **funcionamento sustentável**, não output bruto: tem permissão de te
+tirar do hiperfoco **mesmo quando está rendendo**, porque sabe o que vem depois do colapso.
 
 ---
 
-## 12. O que reaproveitamos do focusbar
+## 11. Stack de IA — custo fixo/grátis (M1 8GB)
 
-- **Casca Tauri + React** (UI, tray, background, autostart).
-- **Dashboard / timeline / categorias / coach / lembretes** → viram a camada de apresentação.
-- **Detecção de foco/idle** → ainda útil como sinal barato (sem depender só do Screenpipe).
+**Hardware real:** Apple M1, **8GB RAM**. Screenpipe (0,5–3GB) + modelo + macOS não cabem juntos
+folgados → **nada roda 24/7 ao mesmo tempo**.
 
----
+- **Filtro local — `Llama 3.2 3B`** (Ollama, ~2GB): limpa o bruto + destila episódios.
+  **Carregado sob demanda** (a cada ~15min e nos rituais), descarregado depois. Nunca sai da máquina.
+- **Cérebro SOTA — custo fixo/grátis (a parte que sai, já limpa):**
+  - **Claude (Max) via MCP** — o Screenpipe expõe MCP; o Claude lê o destilado sob a tua
+    assinatura (custo fixo, não API medida). Melhor qualidade. Pra conversar com teu dia + debrief.
+  - **Gemini grátis (AI Studio)** — chave gratuita com limites; boa pra passos 100% automáticos.
+  - ❌ **Sem API por token** (Anthropic/OpenAI medida) — é o custo imprevisível que você quer evitar.
+- **Regras antes de modelo:** categorias, foco, idle, alertas (já prontos no focusbar) — custo zero.
 
-## 13. Roadmap de implementação (quando a gente for codar)
-
-1. **Subir o Screenpipe** local e validar a API/MCP (o que dá pra consultar, formato).
-2. **Porteiro v1** — zonas de exclusão + redação. *Privacidade antes da captura total.*
-3. **Camada de episódios** — destilação local bruto→episódio, gravada no nosso banco.
-4. **Detector de loops abertos v1** — extrair compromissos dos episódios, UI de "confere?".
-5. **Ciclo diário** — manhã + debrief na UI do focusbar.
-6. **Modos de proatividade** + alertas de corpo.
-7. **Assistente nuvem** — chat que lê as camadas destiladas (não o bruto).
-8. **Autoconhecimento** + política de esquecimento.
+> Upgrade fácil: mais RAM → Llama maior local; ou trocar o canal SOTA — **sem mexer no resto**.
 
 ---
 
-## 14. Decisões
+## 12. Política de esquecimento (aging)
+
+Hoje: bruto detalhado. ~1 semana: episódios resumidos (bruto descartável). ~1 mês: só padrões.
+Benefício duplo: **privacidade** (risco não acumula) + **peso mental** (memória envelhece como a humana).
+
+---
+
+## 13. Inteligência que evolui
+
+Os agentes melhoram com o tempo. Conhecendo teus hábitos, ele te avisa quando algo está **errado**
+ou quando vê **padrões negativos**: o que te faz **dormir mal**, o que está **constantemente errado**,
+o "após o almoço seu ritmo desanda". Isso é a camada de autoconhecimento virando ação.
+
+---
+
+## 14. Presença na tela (depois)
+
+Ideia futura: ele **"estar presente o dia todo"** num cantinho da tela, pra você nunca esquecer
+dele — sem gastar espaço demais. Funciona melhor com **2+ monitores**, então fica pra uma fase posterior.
+
+---
+
+## 15. O que reaproveitamos do focusbar
+
+Casca Tauri + React (UI, tray, background, autostart) · dashboard/timeline/categorias/coach/lembretes
+→ camada de apresentação · detecção de foco/idle → sinal barato sem depender só do Screenpipe.
+
+---
+
+## 16. Roadmap de implementação (quando codar)
+
+1. Subir Screenpipe local + validar API/MCP.
+2. **Porteiro v1** (zonas de exclusão + redação). *Privacidade antes da captura total.*
+3. **Captura rápida** (inbox → IA digere em tarefa/nota).
+4. **Episódios** (destilação local) no nosso SQLite.
+5. **Loops abertos + intenção com prazo** + UI "confere?".
+6. **Ciclo diário** (manhã + debrief, ≤10min).
+7. **Modos + política de som** das notificações.
+8. **Cérebro SOTA via MCP/Max** (chat + insights sobre o destilado).
+9. **Autoconhecimento + esquecimento** (aging).
+
+---
+
+## 17. Decisões
 
 **Fechadas:**
-- **Modelo:** `Llama 3.2 3B` local (Ollama), carregado sob demanda. Sem nuvem.
-- **Banco da camada de sentido:** SQLite **nosso, ao lado** do Screenpipe (desacoplado).
-- **Ritual diário:** manhã na 1ª atividade do dia; debrief ~18h (ajustável).
-- **Captura:** Screenpipe em perfil leve primeiro, medir antes de subir.
+- IA dois níveis: **Llama 3.2 3B local** + **Claude(Max) via MCP / Gemini grátis**. Sem API medida.
+- Banco da camada de sentido: **SQLite nosso, ao lado**.
+- Ritual: manhã + debrief, **≤ 10 min/dia**.
+- Captura Screenpipe em **perfil leve** primeiro, medir antes de subir.
 
 **Ainda só você responde (input pessoal):**
-- Lista da **zona de exclusão dura**: qual **gerenciador de senha** e qual **banco** você usa,
-  + apps/sites que nunca podem ser lidos. (Isso vem antes de ligar a captura.)
+- **Zona de exclusão dura:** qual **gerenciador de senha** e qual **banco** você usa, + apps/sites
+  que nunca podem ser lidos.
