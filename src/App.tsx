@@ -18,9 +18,10 @@ import { CategoryBreakdown } from "./components/CategoryBreakdown";
 import { TaskBreakdown } from "./components/TaskBreakdown";
 import { InsightsPanel } from "./components/InsightsPanel";
 import { RemindersView } from "./components/RemindersView";
+import { AssistantView } from "./components/AssistantView";
 import "./App.css";
 
-type Tab = "hoje" | "semana" | "lembretes";
+type Tab = "hoje" | "semana" | "assistente" | "lembretes";
 
 function App() {
   const [tab, setTab] = useState<Tab>("hoje");
@@ -221,6 +222,12 @@ function App() {
           Semana
         </button>
         <button
+          className={tab === "assistente" ? "tab active" : "tab"}
+          onClick={() => setTab("assistente")}
+        >
+          Assistente
+        </button>
+        <button
           className={tab === "lembretes" ? "tab active" : "tab"}
           onClick={() => setTab("lembretes")}
         >
@@ -230,6 +237,8 @@ function App() {
 
       {tab === "lembretes" ? (
         <RemindersView />
+      ) : tab === "assistente" ? (
+        <AssistantView />
       ) : tab === "semana" ? (
         weekly && <WeeklyView summary={weekly} />
       ) : (

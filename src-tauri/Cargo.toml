@@ -1,7 +1,7 @@
 [package]
 name = "focusbar"
-version = "0.1.0"
-description = "A Tauri App"
+version = "0.2.0"
+description = "Assistente de produtividade local"
 authors = ["you"]
 edition = "2021"
 
@@ -28,6 +28,8 @@ active-win-pos-rs = "0.8"
 rusqlite = { version = "0.32", features = ["bundled"] }
 user-idle = "0.6"
 chrono = "0.4"
+reqwest = { version = "0.12", features = ["json"] }
+regex = "1"
 
 # Captura de título da janela no macOS via API de Acessibilidade (AX),
 # e checagem/solicitação da permissão de Acessibilidade. Só compila no macOS.

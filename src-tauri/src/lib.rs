@@ -1,3 +1,4 @@
+mod ai;
 mod capture;
 mod category;
 mod coach;
@@ -5,10 +6,12 @@ mod commands;
 mod db;
 mod insights;
 mod models;
+mod redact;
 mod reminders;
 mod state;
 
 use capture::{ActiveWinProvider, WindowProvider};
+use commands::assistant::{ai_available, ai_day_review};
 use commands::permissions::{check_accessibility, request_accessibility};
 use commands::reminders::{
     create_reminder, delete_reminder, list_reminders, set_reminder_enabled,
@@ -124,7 +127,9 @@ pub fn run() {
             create_task_rule,
             delete_task_rule,
             get_current_task,
-            get_task_summary
+            get_task_summary,
+            ai_available,
+            ai_day_review
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
