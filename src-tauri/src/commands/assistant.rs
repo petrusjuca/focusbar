@@ -67,12 +67,14 @@ pub async fn ai_day_review(
     let prompt = format!(
         "Você é um assistente de produtividade gentil e direto, para uma pessoa com TDAH. \
 Tom NUNCA punitivo (jamais diga 'você perdeu tempo'). Responda em português do Brasil, curto e honesto.\n\n\
-Sessões de foco de hoje (horário · duração · [categoria] · app — janela):\n\n{joined}\n\n\
+Sessões de foco de hoje (horário · duração · [categoria] · app — janela/URL):\n\n{joined}\n\n\
+Use as URLs e títulos pra identificar a ATIVIDADE CONCRETA (ex.: 'pesquisando proxy', \
+'YouTube assistindo gameplay', 'editando planilha', 'codando o app'), não só o nome do app.\n\n\
 Responda em markdown, exatamente com estas seções:\n\
-## Episódios\n(agrupe em 3 a 5 blocos de atividade com sentido, ex.: 'início da tarde: codando o app')\n\
+## O que você fez\n(3 a 5 blocos de atividade concreta, com horário e o que era de fato)\n\
 ## Como foi o dia\n(2 a 3 frases honestas e gentis sobre foco e dispersão)\n\
 ## 1 melhoria pra amanhã\n(uma sugestão pequena e concreta)\n\n\
-Seja conciso. Não invente nada que não esteja nos dados."
+Seja conciso e específico. Não invente nada que não esteja nos dados."
     );
 
     ai::generate(prompt).await

@@ -3,6 +3,7 @@ use crate::models::ActiveWindow;
 #[cfg(target_os = "macos")]
 mod macos;
 
+pub mod browser;
 pub mod sampler;
 
 /// Abstração de captura da janela em foco. Mantém o resto do app independente
