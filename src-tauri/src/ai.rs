@@ -44,6 +44,50 @@ pub async fn is_available() -> bool {
         .unwrap_or(false)
 }
 
+#[derive(Deserialize)]
+struct TagsResp {
+    models: Vec<TagModel>,
+}
+#[derive(Deserialize)]
+struct TagModel {
+    name: String,
+}
+
+/// O modelo configurado já está baixado?
+pub async fn has_model() -> bool {
+    let wanted = model();
+    let base_name = wanted.split(':').next().unwrap_or(&wanted).to_string();
+    match reqwest::Client::new()
+        .get(format!("{}/api/tags", base()))
+        .send()
+        .await
+    {
+        Ok(r) => match r.json::<TagsResp>().await {
+            Ok(t) => t
+                .models
+                .iter()
+                .any(|m| m.name == wanted || m.name.starts_with(&base_name)),
+            Err(_) => false,
+        },
+        Err(_) => false,
+    }
+}
+
+/// Baixa o modelo via Ollama (bloqueia até terminar — pode levar minutos).
+pub async fn pull_model() -> Result<(), String> {
+    let body = serde_json::json!({ "name": model(), "stream": false });
+    let resp = reqwest::Client::new()
+        .post(format!("{}/api/pull", base()))
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| format!("Ollama indisponível ({e})."))?;
+    if !resp.status().is_success() {
+        return Err(format!("Falha ao baixar modelo ({})", resp.status()));
+    }
+    Ok(())
+}
+
 /// Gera texto a partir de um prompt. keep_alive curto = descarrega rápido da RAM.
 pub async fn generate(prompt: String) -> Result<String, String> {
     let body = GenReq {

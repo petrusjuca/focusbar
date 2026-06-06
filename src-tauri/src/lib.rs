@@ -11,7 +11,7 @@ mod reminders;
 mod state;
 
 use capture::{ActiveWinProvider, WindowProvider};
-use commands::assistant::{ai_available, ai_day_review};
+use commands::assistant::{ai_available, ai_day_review, ai_pull_model, ai_status};
 use commands::permissions::{check_accessibility, request_accessibility};
 use commands::reminders::{
     create_reminder, delete_reminder, list_reminders, set_reminder_enabled,
@@ -129,7 +129,9 @@ pub fn run() {
             get_current_task,
             get_task_summary,
             ai_available,
-            ai_day_review
+            ai_day_review,
+            ai_status,
+            ai_pull_model
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

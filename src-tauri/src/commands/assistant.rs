@@ -5,12 +5,33 @@ use crate::db;
 use crate::redact;
 use crate::state::AppState;
 use chrono::{Local, TimeZone};
+use serde::Serialize;
 use tauri::State;
 
 /// Ollama/Llama está disponível?
 #[tauri::command]
 pub async fn ai_available() -> bool {
     ai::is_available().await
+}
+
+#[derive(Serialize)]
+pub struct AiStatus {
+    pub running: bool, // Ollama está rodando?
+    pub model: bool,   // modelo já baixado?
+}
+
+/// Estado da IA: Ollama rodando? modelo baixado? (pro app guiar o setup sozinho)
+#[tauri::command]
+pub async fn ai_status() -> AiStatus {
+    let running = ai::is_available().await;
+    let model = if running { ai::has_model().await } else { false };
+    AiStatus { running, model }
+}
+
+/// Baixa o modelo (clique único na UI; bloqueia até terminar).
+#[tauri::command]
+pub async fn ai_pull_model() -> Result<(), String> {
+    ai::pull_model().await
 }
 
 fn hhmm(ts: i64) -> String {
