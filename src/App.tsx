@@ -41,6 +41,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [hasAccess, setHasAccess] = useState<boolean>(true);
   const [autostart, setAutostart] = useState<boolean>(false);
+  const [paused, setPaused] = useState<boolean>(false);
 
   useEffect(() => {
     let alive = true;
@@ -90,7 +91,22 @@ function App() {
 
   useEffect(() => {
     invoke<boolean>("get_autostart").then(setAutostart).catch(() => {});
+    const id = setInterval(() => {
+      invoke<boolean>("get_paused").then(setPaused).catch(() => {});
+    }, 1500);
+    invoke<boolean>("get_paused").then(setPaused).catch(() => {});
+    return () => clearInterval(id);
   }, []);
+
+  async function togglePause() {
+    const next = !paused;
+    setPaused(next);
+    try {
+      await invoke("set_paused", { paused: next });
+    } catch (e) {
+      setError(String(e));
+    }
+  }
 
   async function grant() {
     try {
@@ -145,6 +161,13 @@ function App() {
     <main className="container">
       <h1>focusbar</h1>
       <p className="subtitle">seu tempo, do seu jeito</p>
+
+      <button
+        className={paused ? "pause-btn paused" : "pause-btn"}
+        onClick={togglePause}
+      >
+        {paused ? "▶ Retomar rastreamento (PAUSADO)" : "⏸ Pausar rastreamento"}
+      </button>
 
       {error && <p className="error">erro: {error}</p>}
 

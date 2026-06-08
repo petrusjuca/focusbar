@@ -63,6 +63,43 @@ h1 {
   color: #9b9ba0;
 }
 
+.pause-btn {
+  margin: 0 auto 1rem;
+  display: block;
+  border: 1px solid #d8d8dc;
+  background: #fff;
+  color: #444;
+  border-radius: 20px;
+  padding: 0.4rem 1.1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.pause-btn.paused {
+  background: #ff9500;
+  color: #fff;
+  border-color: #ff9500;
+}
+
+.ai-card {
+  background: linear-gradient(135deg, #f0e6ff, #e6efff);
+  border-radius: 14px;
+  padding: 1.1rem 1.2rem;
+  text-align: left;
+}
+
+.ai-card-title {
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+
+.ai-card-text {
+  font-size: 0.88rem;
+  color: #555;
+  margin: 0 0 0.8rem;
+}
+
 .tabs {
   display: flex;
   gap: 0.4rem;
@@ -475,6 +512,17 @@ h1 {
 }
 
 @media (prefers-color-scheme: dark) {
+  .pause-btn {
+    background: #2a2a2e;
+    color: #ccc;
+    border-color: #44444a;
+  }
+  .ai-card {
+    background: linear-gradient(135deg, #2e2640, #26303f);
+  }
+  .ai-card-text {
+    color: #b8b8be;
+  }
   .reminder-form {
     background: #2a2a2e;
     box-shadow: none;

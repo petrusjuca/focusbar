@@ -1,14 +1,16 @@
 //! Sampler em background: amostra a janela em foco a cada POLL_SECS, detecta
-//! troca, descarta trocas muito curtas (debounce) e grava UMA linha por sessão.
-//! Enriquece o título com a URL do navegador (contexto pro assistente).
+//! troca, descarta trocas curtas (debounce) e grava UMA linha por sessão.
 //!
-//! Ociosidade (AFK): sem input por IDLE_THRESHOLD_SECS fecha a sessão no último
-//! input e marca `was_idle_trimmed`.
+//! - Navegadores: o "app" vira o SITE (WhatsApp, Miro, YouTube) via a URL, em
+//!   vez de "Chrome"/"Opera" — assim o "tempo por app" fica útil.
+//! - Pause: quando `paused`, não conta nada (sem ser procrastinação).
+//! - Idle: sem input por IDLE_THRESHOLD_SECS fecha no último input.
 
 use crate::capture::{browser, ActiveWinProvider, WindowProvider};
 use crate::coach::Coach;
 use crate::db;
 use rusqlite::Connection;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -20,9 +22,10 @@ const IDLE_THRESHOLD_SECS: i64 = 120;
 
 struct OpenSession {
     app_id: i64,
-    app_name: String,
-    raw_title: String,    // título cru, usado pra detectar troca
-    stored_title: String, // título + URL, gravado e mandado pro assistente
+    raw_app: String,      // ex.: "Opera GX" — usado pra detectar troca
+    raw_title: String,    // título cru — usado pra detectar troca
+    label_app: String,    // ex.: "WhatsApp" (site) — usado no banco/coach
+    stored_title: String, // título + URL — gravado e mandado pro assistente
     start_ts: i64,
 }
 
@@ -39,15 +42,7 @@ fn idle_secs() -> i64 {
         .unwrap_or(0)
 }
 
-/// Junta título + URL do navegador (busca AppleScript só aqui, na troca).
-fn enrich_title(app_name: &str, title: &str) -> String {
-    match browser::browser_url(app_name) {
-        Some(url) if !url.is_empty() => format!("{} — {}", title, url),
-        _ => title.to_string(),
-    }
-}
-
-pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>) {
+pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>) {
     thread::spawn(move || {
         let provider = ActiveWinProvider;
         let mut current: Option<OpenSession> = None;
@@ -57,13 +52,19 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>) {
             let now = now_ts();
             let idle = idle_secs();
             let is_idle = idle >= IDLE_THRESHOLD_SECS;
+            let is_paused = paused.load(Ordering::Relaxed);
 
-            let win = if is_idle { None } else { provider.current() };
+            // Pausado ou ocioso = sem foco (mas pausado NÃO é idle-trimmed).
+            let win = if is_paused || is_idle {
+                None
+            } else {
+                provider.current()
+            };
 
             let new_key = win.as_ref().map(|w| (w.app_name.as_str(), w.title.as_str()));
             let cur_key = current
                 .as_ref()
-                .map(|c| (c.app_name.as_str(), c.raw_title.as_str()));
+                .map(|c| (c.raw_app.as_str(), c.raw_title.as_str()));
 
             if new_key != cur_key {
                 // Fecha a sessão anterior.
@@ -87,19 +88,31 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>) {
                     }
                 }
 
-                // Abre a nova (enriquece com URL aqui — uma vez por troca).
+                // Abre a nova (resolve site + URL aqui, uma vez por troca).
                 if let Some(w) = win.as_ref() {
-                    let bundle = w.app_bundle_id.clone().unwrap_or_default();
+                    let url = browser::browser_url(&w.app_name);
+                    let (label_app, stored_title, bundle) = match &url {
+                        Some(u) => (
+                            browser::site_name(u).unwrap_or_else(|| w.app_name.clone()),
+                            format!("{} — {}", w.title, u),
+                            String::new(), // site agrupa independente do navegador
+                        ),
+                        None => (
+                            w.app_name.clone(),
+                            w.title.clone(),
+                            w.app_bundle_id.clone().unwrap_or_default(),
+                        ),
+                    };
                     let app_id = db
                         .lock()
                         .ok()
-                        .and_then(|conn| db::get_or_create_app(&conn, &w.app_name, &bundle).ok());
+                        .and_then(|conn| db::get_or_create_app(&conn, &label_app, &bundle).ok());
                     if let Some(app_id) = app_id {
-                        let stored_title = enrich_title(&w.app_name, &w.title);
                         current = Some(OpenSession {
                             app_id,
-                            app_name: w.app_name.clone(),
+                            raw_app: w.app_name.clone(),
                             raw_title: w.title.clone(),
+                            label_app,
                             stored_title,
                             start_ts: now,
                         });
@@ -110,10 +123,10 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>) {
                 coach.note_switch(now);
             }
 
-            // Coach ao vivo (usa o título enriquecido — pega youtube.com etc.).
+            // Coach ao vivo (usa o nome do site + título com URL).
             let cur_tuple = current
                 .as_ref()
-                .map(|c| (c.app_name.as_str(), c.stored_title.as_str(), c.start_ts));
+                .map(|c| (c.label_app.as_str(), c.stored_title.as_str(), c.start_ts));
             coach.tick(now, cur_tuple, &app, &db);
 
             thread::sleep(Duration::from_secs(POLL_SECS));

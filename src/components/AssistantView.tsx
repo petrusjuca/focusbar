@@ -7,7 +7,6 @@ interface AiStatus {
   model: boolean;
 }
 
-// Render mínimo de markdown (##, ###, -, parágrafos) — sem dependência extra.
 function renderMd(text: string) {
   return text.split("\n").map((line, i) => {
     const t = line.trim();
@@ -25,6 +24,7 @@ export function AssistantView() {
   const [pulling, setPulling] = useState(false);
   const [loading, setLoading] = useState(false);
   const [review, setReview] = useState<string>("");
+  const [copied, setCopied] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   async function refreshStatus() {
@@ -55,27 +55,55 @@ export function AssistantView() {
     setLoading(true);
     setErr(null);
     try {
-      const r = await invoke<string>("ai_day_review", { day: null });
-      setReview(r);
+      setReview(await invoke<string>("ai_day_review", { day: null }));
     } catch (e) {
       setErr(String(e));
     }
     setLoading(false);
   }
 
+  async function copyForClaude() {
+    setErr(null);
+    try {
+      const digest = await invoke<string>("ai_day_digest", { day: null });
+      await navigator.clipboard.writeText(digest);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2500);
+    } catch (e) {
+      setErr(String(e));
+    }
+  }
+
   return (
     <section className="daily">
       <div className="daily-header">
-        <span>ASSISTENTE (IA LOCAL)</span>
+        <span>ASSISTENTE</span>
       </div>
 
-      {/* Estado 1: Ollama não está rodando/instalado */}
+      {/* Opção A: IA forte (Claude/etc.) — sempre disponível, sem instalar nada */}
+      <div className="ai-card">
+        <div className="ai-card-title">Analisar com uma IA forte (ex.: Claude)</div>
+        <p className="ai-card-text">
+          Copia o resumo do seu dia (já limpo: sem senha/CPF/banco) pra você colar
+          no Claude.ai e ter uma análise inteligente. Grátis no seu plano.
+        </p>
+        <button className="grant-btn" onClick={copyForClaude}>
+          {copied ? "copiado! cole no Claude ✓" : "Copiar resumo do dia"}
+        </button>
+      </div>
+
+      <div className="daily-header" style={{ marginTop: "1.5rem" }}>
+        <span>OU IA LOCAL (NO SEU PC)</span>
+      </div>
+
+      {/* Estado 1: Ollama não está rodando */}
       {status && !status.running && (
         <div className="permission-banner">
-          <div className="perm-title">Ative a IA local (uma vez)</div>
+          <div className="perm-title">A IA local não está ativa</div>
           <p className="perm-text">
-            A IA roda na sua própria máquina pelo <b>Ollama</b> (grátis). Instale e
-            abra o Ollama — depois é só voltar aqui.
+            A IA local roda pelo <b>Ollama</b> (grátis). Se já instalou, <b>abra o
+            app Ollama</b> (ele precisa estar aberto). Pra conferir, acesse{" "}
+            <b>http://localhost:11434</b> no navegador — deve dizer "Ollama is running".
           </p>
           <button
             className="grant-btn"
@@ -83,34 +111,27 @@ export function AssistantView() {
           >
             Baixar o Ollama
           </button>
-          <button
-            className="link-btn"
-            style={{ marginLeft: 12 }}
-            onClick={refreshStatus}
-          >
-            já instalei, verificar
+          <button className="link-btn" style={{ marginLeft: 12 }} onClick={refreshStatus}>
+            já abri, verificar
           </button>
         </div>
       )}
 
-      {/* Estado 2: Ollama ok, falta baixar o modelo */}
+      {/* Estado 2: falta baixar o modelo */}
       {status && status.running && !status.model && (
         <div className="permission-banner">
           <div className="perm-title">Baixar a IA (uma vez, ~2GB)</div>
-          <p className="perm-text">
-            Falta baixar o modelo que roda na sua máquina. É um clique — depois
-            funciona pra sempre, offline.
-          </p>
+          <p className="perm-text">Um clique e funciona pra sempre, offline.</p>
           <button className="grant-btn" onClick={downloadModel} disabled={pulling}>
-            {pulling ? "baixando a IA… (pode levar alguns minutos)" : "Baixar a IA"}
+            {pulling ? "baixando a IA… (alguns minutos)" : "Baixar a IA"}
           </button>
         </div>
       )}
 
-      {/* Estado 3: tudo pronto */}
+      {/* Estado 3: pronto */}
       {status && status.running && status.model && (
         <button className="grant-btn" onClick={gen} disabled={loading}>
-          {loading ? "pensando… (alguns segundos)" : "Gerar resumo do dia com IA"}
+          {loading ? "pensando…" : "Gerar resumo do dia (IA local)"}
         </button>
       )}
 
@@ -118,8 +139,8 @@ export function AssistantView() {
       {review && <div className="ai-review">{renderMd(review)}</div>}
 
       <p className="bg-note" style={{ marginTop: "1rem" }}>
-        Roda no seu computador. Nada vai pra terceiros; o porteiro redige
-        senha/CPF/cartão e pula apps de banco/senha.
+        O porteiro redige senha/CPF/cartão e pula apps de banco/senha antes de
+        qualquer análise.
       </p>
     </section>
   );

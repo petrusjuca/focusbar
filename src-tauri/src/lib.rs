@@ -11,7 +11,9 @@ mod reminders;
 mod state;
 
 use capture::{ActiveWinProvider, WindowProvider};
-use commands::assistant::{ai_available, ai_day_review, ai_pull_model, ai_status};
+use commands::assistant::{
+    ai_available, ai_day_digest, ai_day_review, ai_pull_model, ai_status,
+};
 use commands::permissions::{check_accessibility, request_accessibility};
 use commands::reminders::{
     create_reminder, delete_reminder, list_reminders, set_reminder_enabled,
@@ -26,10 +28,11 @@ use commands::tasks::{
 };
 use models::ActiveWindow;
 use state::AppState;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, WindowEvent};
+use tauri::{AppHandle, Manager, State, WindowEvent};
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 
 /// Lê a janela/app atualmente em foco. Chamado pelo frontend a cada ~1s.
@@ -52,6 +55,18 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<(), String> {
     res.map_err(|e| e.to_string())
 }
 
+/// O rastreamento está pausado?
+#[tauri::command]
+fn get_paused(state: State<AppState>) -> bool {
+    state.paused.load(Ordering::Relaxed)
+}
+
+/// Pausa/retoma o rastreamento (pausado = não conta nada).
+#[tauri::command]
+fn set_paused(state: State<AppState>, paused: bool) {
+    state.paused.store(paused, Ordering::Relaxed);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -71,17 +86,22 @@ pub fn run() {
             let db_path = dir.join("focusbar.db");
             let conn = db::open(&db_path).expect("falha ao abrir o banco");
             let db = Arc::new(Mutex::new(conn));
+            let paused = Arc::new(AtomicBool::new(false));
 
-            app.manage(AppState { db: db.clone() });
+            app.manage(AppState {
+                db: db.clone(),
+                paused: paused.clone(),
+            });
 
             // Sobe o sampler de foco e o scheduler de lembretes em background.
-            capture::sampler::spawn(app.handle().clone(), db.clone());
+            capture::sampler::spawn(app.handle().clone(), db.clone(), paused);
             reminders::scheduler::spawn(app.handle().clone(), db);
 
-            // Ícone na barra de menu (tray) com menu Abrir/Sair.
+            // Ícone na barra de menu (tray) com menu Abrir / Pausar / Sair.
             let show = MenuItem::with_id(app, "show", "Abrir focusbar", true, None::<&str>)?;
+            let pause = MenuItem::with_id(app, "pause", "Pausar / retomar", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "Sair", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quit])?;
+            let menu = Menu::with_items(app, &[&show, &pause, &quit])?;
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())
                 .tooltip("focusbar")
@@ -92,6 +112,11 @@ pub fn run() {
                             let _ = w.show();
                             let _ = w.set_focus();
                         }
+                    }
+                    "pause" => {
+                        let st = app.state::<AppState>();
+                        let now = st.paused.load(Ordering::Relaxed);
+                        st.paused.store(!now, Ordering::Relaxed);
                     }
                     "quit" => app.exit(0),
                     _ => {}
@@ -122,6 +147,8 @@ pub fn run() {
             delete_reminder,
             get_autostart,
             set_autostart,
+            get_paused,
+            set_paused,
             get_day_insights,
             list_task_rules,
             create_task_rule,
@@ -130,6 +157,7 @@ pub fn run() {
             get_task_summary,
             ai_available,
             ai_day_review,
+            ai_day_digest,
             ai_status,
             ai_pull_model
         ])

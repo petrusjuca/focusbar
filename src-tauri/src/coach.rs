@@ -13,9 +13,7 @@ use tauri::AppHandle;
 
 const PROCRAST_THRESHOLD: i64 = 20 * 60; // 20min seguidos
 const PROCRAST_COOLDOWN: i64 = 15 * 60;
-const FRAG_WINDOW: i64 = 10 * 60; // janela de 10min
-const FRAG_THRESHOLD: usize = 25; // trocas
-const FRAG_COOLDOWN: i64 = 20 * 60;
+const FRAG_WINDOW: i64 = 10 * 60; // janela de 10min (só pra poda; alerta desligado)
 const STUCK_THRESHOLD: i64 = 50 * 60; // 50min na mesma janela
 const EOD_HOUR: u32 = 18; // resumo às 18h
 
@@ -103,18 +101,8 @@ impl Coach {
             self.procrast_start = None;
         }
 
-        // Fragmentação.
-        if self.switches.len() >= FRAG_THRESHOLD && self.cooldown_ok("frag", now, FRAG_COOLDOWN) {
-            self.fire(
-                app,
-                "frag",
-                now,
-                &format!(
-                    "{} trocas de janela em 10min — seu foco está fragmentado",
-                    self.switches.len()
-                ),
-            );
-        }
+        // (Alerta de fragmentação removido — incomodava quem usa muitas janelas.
+        //  Fragmentação continua disponível só como insight do dia, não como alerta.)
 
         // Resumo de fim de dia (uma vez por dia, a partir das EOD_HOUR).
         let now_local = Local::now();
