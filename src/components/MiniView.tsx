@@ -1,7 +1,7 @@
 import type { ActiveWindow, DailySummary } from "../types";
 import { fmtDuration } from "../format";
 
-// Janela compacta sempre-no-topo: o essencial num cantinho da tela.
+// Widget compacto, flutuante e sempre-no-topo. Sem moldura — arrasta pela área.
 export function MiniView({
   win,
   summary,
@@ -15,28 +15,36 @@ export function MiniView({
   onExpand: () => void;
   onTogglePause: () => void;
 }) {
+  const app = win?.app_name?.trim();
+  const showApp = paused ? "pausado" : app && app !== "focusbar" ? app : app || "—";
+
   return (
-    <div className="mini">
-      <div className="mini-top">
-        <span className="mini-label">AGORA</span>
-        <button className="mini-btn" onClick={onExpand} title="expandir">
-          ⤢
-        </button>
+    <div className={paused ? "mini paused" : "mini"}>
+      <div className="mini-top" data-tauri-drag-region>
+        <span className="mini-now">{paused ? "PAUSADO" : "AGORA"}</span>
+        <div className="mini-actions">
+          <button
+            className="mini-icon"
+            onClick={onTogglePause}
+            title={paused ? "retomar" : "pausar"}
+          >
+            {paused ? "▶" : "⏸"}
+          </button>
+          <button className="mini-icon" onClick={onExpand} title="expandir">
+            ⤢
+          </button>
+        </div>
       </div>
 
-      <div className="mini-app">{paused ? "⏸ pausado" : win?.app_name || "—"}</div>
-      <div className="mini-title">{paused ? "" : win?.title || ""}</div>
+      <div className="mini-app" data-tauri-drag-region title={win?.title || ""}>
+        {showApp}
+      </div>
 
-      <div className="mini-bottom">
-        <span className="mini-focus">
-          foco hoje: <b>{summary ? fmtDuration(summary.total_secs) : "—"}</b>
+      <div className="mini-foot" data-tauri-drag-region>
+        <span className="mini-focus-label">foco hoje</span>
+        <span className="mini-focus-val">
+          {summary ? fmtDuration(summary.total_secs) : "—"}
         </span>
-        <button
-          className={paused ? "mini-pause paused" : "mini-pause"}
-          onClick={onTogglePause}
-        >
-          {paused ? "▶" : "⏸"}
-        </button>
       </div>
     </div>
   );

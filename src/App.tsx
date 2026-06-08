@@ -116,8 +116,9 @@ function App() {
   async function enterMini() {
     try {
       const w = getCurrentWindow();
-      await w.setSize(new LogicalSize(300, 175));
+      await w.setDecorations(false);
       await w.setAlwaysOnTop(true);
+      await w.setSize(new LogicalSize(232, 116));
       setMini(true);
     } catch (e) {
       setError(String(e));
@@ -128,6 +129,7 @@ function App() {
     try {
       const w = getCurrentWindow();
       await w.setAlwaysOnTop(false);
+      await w.setDecorations(true);
       await w.setSize(new LogicalSize(680, 820));
       setMini(false);
     } catch (e) {

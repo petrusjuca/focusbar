@@ -63,15 +63,21 @@ h1 {
   color: #9b9ba0;
 }
 
-/* Janela compacta (mini mode) */
+/* Widget compacto (mini mode) — sem moldura, flutuante */
 .mini {
-  padding: 0.6rem 0.8rem;
   height: 100vh;
   box-sizing: border-box;
+  padding: 0.55rem 0.7rem 0.6rem;
   display: flex;
   flex-direction: column;
+  background: #ffffff;
   -webkit-user-select: none;
   user-select: none;
+  cursor: default;
+}
+
+.mini.paused {
+  background: #fff8ef;
 }
 
 .mini-top {
@@ -80,63 +86,64 @@ h1 {
   align-items: center;
 }
 
-.mini-label {
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  color: #9b9ba0;
+.mini-now {
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #b0b0b6;
 }
 
-.mini-btn {
+.mini.paused .mini-now {
+  color: #ff9500;
+}
+
+.mini-actions {
+  display: flex;
+  gap: 0.1rem;
+}
+
+.mini-icon {
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 0.9rem;
-  color: #888;
+  font-size: 0.82rem;
+  color: #9a9aa0;
+  padding: 0.1rem 0.3rem;
+  border-radius: 6px;
+  line-height: 1;
+}
+
+.mini-icon:hover {
+  background: rgba(0, 0, 0, 0.07);
+  color: #444;
 }
 
 .mini-app {
-  font-size: 1.15rem;
+  font-size: 1.3rem;
   font-weight: 700;
-  margin-top: 0.15rem;
+  letter-spacing: -0.01em;
+  margin: 0.12rem 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.mini-title {
-  font-size: 0.72rem;
-  color: #8a8a90;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mini-bottom {
+.mini-foot {
   margin-top: auto;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  align-items: baseline;
+  gap: 0.4rem;
 }
 
-.mini-focus {
-  font-size: 0.8rem;
-  color: #555;
+.mini-focus-label {
+  font-size: 0.72rem;
+  color: #9a9aa0;
 }
 
-.mini-pause {
-  border: 1px solid #d8d8dc;
-  background: #fff;
-  border-radius: 8px;
-  padding: 0.15rem 0.5rem;
-  cursor: pointer;
-  font-size: 0.8rem;
-}
-
-.mini-pause.paused {
-  background: #ff9500;
-  color: #fff;
-  border-color: #ff9500;
+.mini-focus-val {
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #007aff;
 }
 
 .mini-toggle {
@@ -628,18 +635,20 @@ h1 {
 
 @media (prefers-color-scheme: dark) {
   .pause-btn,
-  .mini-toggle,
-  .mini-pause {
+  .mini-toggle {
     background: #2a2a2e;
     color: #ccc;
     border-color: #44444a;
   }
-  .mini-focus {
-    color: #b8b8be;
+  .mini {
+    background: #1f1f22;
   }
-  .mini-pause.paused {
-    background: #ff9500;
-    color: #fff;
+  .mini.paused {
+    background: #2e2616;
+  }
+  .mini-icon:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #ddd;
   }
   .ai-card {
     background: linear-gradient(135deg, #2e2640, #26303f);
