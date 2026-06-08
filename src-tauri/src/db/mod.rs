@@ -9,6 +9,7 @@ use std::path::Path;
 pub mod notes;
 pub mod reminders;
 pub mod tasks;
+pub mod todos;
 
 /// Abre (ou cria) o banco em `path`, liga WAL e roda as migrations.
 pub fn open(path: &Path) -> rusqlite::Result<Connection> {
@@ -50,6 +51,14 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             enabled       INTEGER NOT NULL DEFAULT 1,
             last_fired_ts INTEGER,
             created_at    INTEGER NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS todos (
+            id         INTEGER PRIMARY KEY,
+            text       TEXT NOT NULL,
+            done       INTEGER NOT NULL DEFAULT 0,
+            created_at INTEGER NOT NULL,
+            done_at    INTEGER
         );
 
         CREATE TABLE IF NOT EXISTS notes (

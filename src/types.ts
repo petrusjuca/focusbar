@@ -71,6 +71,14 @@ export interface Note {
   created_at: number;
 }
 
+export interface Todo {
+  id: number;
+  text: string;
+  done: boolean;
+  created_at: number;
+  done_at: number | null;
+}
+
 export interface Reminder {
   id: number;
   text: string;

@@ -93,6 +93,16 @@ pub struct Note {
     pub created_at: i64,
 }
 
+/// Tarefa (to-do): algo a fazer, marca como feito. Persiste até concluir.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Todo {
+    pub id: i64,
+    pub text: String,
+    pub done: bool,
+    pub created_at: i64,
+    pub done_at: Option<i64>,
+}
+
 /// Um lembrete. `kind`: "once" (dispara uma vez em fire_at) ou
 /// "recurring" (dispara a cada interval_secs).
 #[derive(Debug, Clone, Serialize, Deserialize)]

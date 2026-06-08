@@ -23,9 +23,10 @@ import { RemindersView } from "./components/RemindersView";
 import { AssistantView } from "./components/AssistantView";
 import { MiniView } from "./components/MiniView";
 import { DiaryView } from "./components/DiaryView";
+import { TodoView } from "./components/TodoView";
 import "./App.css";
 
-type Tab = "hoje" | "semana" | "assistente" | "lembretes";
+type Tab = "hoje" | "tarefas" | "semana" | "assistente" | "lembretes";
 
 function App() {
   const [tab, setTab] = useState<Tab>("hoje");
@@ -118,7 +119,7 @@ function App() {
       const w = getCurrentWindow();
       await w.setDecorations(false);
       await w.setAlwaysOnTop(true);
-      await w.setSize(new LogicalSize(232, 116));
+      await w.setSize(new LogicalSize(244, 116));
       setMini(true);
     } catch (e) {
       setError(String(e));
@@ -280,6 +281,12 @@ function App() {
           Hoje
         </button>
         <button
+          className={tab === "tarefas" ? "tab active" : "tab"}
+          onClick={() => setTab("tarefas")}
+        >
+          Tarefas
+        </button>
+        <button
           className={tab === "semana" ? "tab active" : "tab"}
           onClick={() => setTab("semana")}
         >
@@ -301,6 +308,8 @@ function App() {
 
       {tab === "lembretes" ? (
         <RemindersView />
+      ) : tab === "tarefas" ? (
+        <TodoView />
       ) : tab === "assistente" ? (
         <AssistantView />
       ) : tab === "semana" ? (

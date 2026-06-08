@@ -1,7 +1,11 @@
+import { useState } from "react";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { LogicalSize } from "@tauri-apps/api/dpi";
 import type { ActiveWindow, DailySummary } from "../types";
 import { fmtDuration } from "../format";
+import { useTodos } from "../hooks/useTodos";
 
-// Widget compacto, flutuante e sempre-no-topo. Sem moldura — arrasta pela área.
+// Widget compacto, flutuante e sempre-no-topo. Arrasta pela área (sem moldura).
 export function MiniView({
   win,
   summary,
@@ -15,13 +19,41 @@ export function MiniView({
   onExpand: () => void;
   onTogglePause: () => void;
 }) {
+  const [view, setView] = useState<"now" | "tarefas">("now");
+  const { open, add, toggle } = useTodos(3000);
+  const [text, setText] = useState("");
+
+  async function switchView(v: "now" | "tarefas") {
+    setView(v);
+    try {
+      await getCurrentWindow().setSize(
+        new LogicalSize(244, v === "tarefas" ? 250 : 116)
+      );
+    } catch {
+      /* ignore */
+    }
+  }
+
   const app = win?.app_name?.trim();
   const showApp = paused ? "pausado" : app && app !== "focusbar" ? app : app || "—";
 
   return (
-    <div className={paused ? "mini paused" : "mini"}>
-      <div className="mini-top" data-tauri-drag-region>
-        <span className="mini-now">{paused ? "PAUSADO" : "AGORA"}</span>
+    <div className={paused ? "mini paused" : "mini"} data-tauri-drag-region>
+      <div className="mini-top">
+        <div className="mini-tabs">
+          <button
+            className={view === "now" ? "mini-tab active" : "mini-tab"}
+            onClick={() => switchView("now")}
+          >
+            Agora
+          </button>
+          <button
+            className={view === "tarefas" ? "mini-tab active" : "mini-tab"}
+            onClick={() => switchView("tarefas")}
+          >
+            Tarefas{open.length ? ` · ${open.length}` : ""}
+          </button>
+        </div>
         <div className="mini-actions">
           <button
             className="mini-icon"
@@ -36,16 +68,46 @@ export function MiniView({
         </div>
       </div>
 
-      <div className="mini-app" data-tauri-drag-region title={win?.title || ""}>
-        {showApp}
-      </div>
-
-      <div className="mini-foot" data-tauri-drag-region>
-        <span className="mini-focus-label">foco hoje</span>
-        <span className="mini-focus-val">
-          {summary ? fmtDuration(summary.total_secs) : "—"}
-        </span>
-      </div>
+      {view === "now" ? (
+        <>
+          <div className="mini-app" title={win?.title || ""}>
+            {showApp}
+          </div>
+          <div className="mini-foot">
+            <span className="mini-focus-label">foco hoje</span>
+            <span className="mini-focus-val">
+              {summary ? fmtDuration(summary.total_secs) : "—"}
+            </span>
+          </div>
+        </>
+      ) : (
+        <div className="mini-todos">
+          <input
+            className="mini-todo-input"
+            placeholder="+ nova tarefa (Enter)"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                add(text);
+                setText("");
+              }
+            }}
+          />
+          <ul className="mini-todo-list">
+            {open.length === 0 ? (
+              <li className="mini-todo-empty">tudo feito ✓</li>
+            ) : (
+              open.slice(0, 6).map((t) => (
+                <li key={t.id} className="mini-todo-row">
+                  <button className="todo-check" onClick={() => toggle(t.id)} />
+                  <span>{t.text}</span>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

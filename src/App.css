@@ -97,9 +97,134 @@ h1 {
   color: #ff9500;
 }
 
+.mini-tabs {
+  display: flex;
+  gap: 0.15rem;
+}
+
+.mini-tab {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #b8b8be;
+  padding: 0.1rem 0.2rem;
+}
+
+.mini-tab.active {
+  color: #007aff;
+}
+
 .mini-actions {
   display: flex;
   gap: 0.1rem;
+}
+
+.mini-todos {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin-top: 0.3rem;
+}
+
+.mini-todo-input {
+  border: 1px solid #e0e0e4;
+  border-radius: 7px;
+  padding: 0.3rem 0.45rem;
+  font-size: 0.78rem;
+  margin-bottom: 0.35rem;
+}
+
+.mini-todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.mini-todo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  padding: 0.12rem 0;
+}
+
+.mini-todo-empty {
+  font-size: 0.78rem;
+  color: #9a9aa0;
+  padding: 0.3rem 0;
+}
+
+/* Lista de tarefas (aba + widget) */
+.todo-check {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1.5px solid #c0c0c6;
+  background: #fff;
+  cursor: pointer;
+  font-size: 0.7rem;
+  color: #fff;
+  line-height: 1;
+  padding: 0;
+}
+
+.todo-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.todo-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: #fff;
+  border-radius: 10px;
+  padding: 0.55rem 0.7rem;
+  margin-bottom: 0.4rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.todo-row .todo-check {
+  width: 22px;
+  height: 22px;
+  font-size: 0.85rem;
+}
+
+.todo-text {
+  flex: 1;
+  font-size: 0.92rem;
+}
+
+.todo-row.done .todo-check {
+  background: #34c759;
+  border-color: #34c759;
+}
+
+.todo-row.done .todo-text {
+  text-decoration: line-through;
+  color: #9b9ba0;
+}
+
+.mini-todo-row .todo-check {
+  width: 15px;
+  height: 15px;
+}
+
+.todo-done-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #9b9ba0;
+  margin: 0.6rem 0 0.3rem;
 }
 
 .mini-icon {
