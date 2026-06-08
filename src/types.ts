@@ -62,6 +62,14 @@ export interface Insight {
   text: string;
 }
 
+export interface Note {
+  id: number;
+  day: string;
+  kind: string; // "intention" | "note"
+  text: string;
+  created_at: number;
+}
+
 export interface Reminder {
   id: number;
   text: string;

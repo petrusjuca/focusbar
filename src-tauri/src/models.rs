@@ -82,6 +82,16 @@ pub struct Insight {
     pub text: String,
 }
 
+/// Nota/intenção do dia. kind: "intention" | "note".
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Note {
+    pub id: i64,
+    pub day: String,
+    pub kind: String,
+    pub text: String,
+    pub created_at: i64,
+}
+
 /// Um lembrete. `kind`: "once" (dispara uma vez em fire_at) ou
 /// "recurring" (dispara a cada interval_secs).
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -5,6 +5,7 @@ use crate::models::{AppTotal, FocusSession};
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::Path;
 
+pub mod notes;
 pub mod reminders;
 pub mod tasks;
 
@@ -49,6 +50,15 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             last_fired_ts INTEGER,
             created_at    INTEGER NOT NULL
         );
+
+        CREATE TABLE IF NOT EXISTS notes (
+            id         INTEGER PRIMARY KEY,
+            day        TEXT NOT NULL,
+            kind       TEXT NOT NULL,
+            text       TEXT NOT NULL,
+            created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_notes_day ON notes(day);
 
         CREATE TABLE IF NOT EXISTS task_rules (
             id        INTEGER PRIMARY KEY,

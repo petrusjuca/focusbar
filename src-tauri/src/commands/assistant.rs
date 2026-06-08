@@ -42,6 +42,27 @@ fn hhmm(ts: i64) -> String {
         .unwrap_or_default()
 }
 
+fn day_label(day: Option<&str>) -> String {
+    day.map(|s| s.to_string())
+        .unwrap_or_else(|| Local::now().date_naive().format("%Y-%m-%d").to_string())
+}
+
+/// Bloco com as intenções declaradas no dia (pra IA comparar com a execução).
+fn intentions_block(state: &State<'_, AppState>, day: Option<&str>) -> String {
+    let label = day_label(day);
+    let ints = state
+        .db
+        .lock()
+        .ok()
+        .and_then(|c| db::notes::intentions_for_day(&c, &label).ok())
+        .unwrap_or_default();
+    if ints.is_empty() {
+        String::new()
+    } else {
+        format!("Minhas intenções declaradas hoje: {}.\n\n", ints.join("; "))
+    }
+}
+
 /// Coleta as sessões do dia já LIMPAS (porteiro: redação + zonas de exclusão),
 /// formatadas em linhas. Síncrono — não segura lock em await.
 fn collect_clean_lines(
@@ -85,15 +106,16 @@ pub async fn ai_day_review(
     if lines.is_empty() {
         return Err("Sem dados suficientes hoje pra analisar.".into());
     }
+    let intentions = intentions_block(&state, day.as_deref());
     let joined = lines.join("\n");
     let prompt = format!(
         "Você é um assistente de produtividade gentil e direto, para uma pessoa com TDAH. \
 Tom NUNCA punitivo. Responda em português do Brasil, curto e honesto.\n\n\
-Sessões de hoje (horário · duração · [categoria] · app/site — janela/URL):\n\n{joined}\n\n\
+{intentions}Sessões de hoje (horário · duração · [categoria] · app/site — janela/URL):\n\n{joined}\n\n\
 Use as URLs e títulos pra identificar a ATIVIDADE CONCRETA, não só o nome do app.\n\n\
 Responda em markdown com estas seções:\n\
 ## O que você fez\n(3 a 5 blocos de atividade concreta, com horário)\n\
-## Como foi o dia\n(2 a 3 frases honestas e gentis sobre foco e dispersão)\n\
+## Como foi o dia\n(2 a 3 frases honestas; se houver intenções, diga se bateu com elas)\n\
 ## 1 melhoria pra amanhã\n(uma sugestão pequena e concreta)\n\n\
 Seja conciso. Não invente nada que não esteja nos dados."
     );
@@ -111,12 +133,13 @@ pub async fn ai_day_digest(
     if lines.is_empty() {
         return Err("Sem dados suficientes hoje.".into());
     }
+    let intentions = intentions_block(&state, day.as_deref());
     let joined = lines.join("\n");
     Ok(format!(
         "Você é meu assistente de produtividade (tenho TDAH). Analise meu dia de forma gentil \
 e honesta, nunca punitiva. Identifique a atividade concreta pelos sites/títulos. Me diga: \
 (1) o que fiz em blocos, (2) como foi meu foco, (3) onde perdi tempo sem perceber, \
-(4) UMA melhoria pra amanhã.\n\n\
-Sessões de hoje (horário · duração · [categoria] · app/site — janela/URL):\n\n{joined}"
+(4) se bati minhas intenções, (5) UMA melhoria pra amanhã.\n\n\
+{intentions}Sessões de hoje (horário · duração · [categoria] · app/site — janela/URL):\n\n{joined}"
     ))
 }

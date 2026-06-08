@@ -22,6 +22,7 @@ import { InsightsPanel } from "./components/InsightsPanel";
 import { RemindersView } from "./components/RemindersView";
 import { AssistantView } from "./components/AssistantView";
 import { MiniView } from "./components/MiniView";
+import { DiaryView } from "./components/DiaryView";
 import "./App.css";
 
 type Tab = "hoje" | "semana" | "assistente" | "lembretes";
@@ -304,6 +305,7 @@ function App() {
         weekly && <WeeklyView summary={weekly} />
       ) : (
         <>
+          <DiaryView />
           <InsightsPanel insights={dayInsights} />
           {summary && <DailyView summary={summary} />}
           <CategoryBreakdown data={categories} />

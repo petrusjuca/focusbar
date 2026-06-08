@@ -14,6 +14,7 @@ use capture::{ActiveWinProvider, WindowProvider};
 use commands::assistant::{
     ai_available, ai_day_digest, ai_day_review, ai_pull_model, ai_status,
 };
+use commands::notes::{add_note, delete_note, list_notes};
 use commands::permissions::{check_accessibility, request_accessibility};
 use commands::reminders::{
     create_reminder, delete_reminder, list_reminders, set_reminder_enabled,
@@ -159,7 +160,10 @@ pub fn run() {
             ai_day_review,
             ai_day_digest,
             ai_status,
-            ai_pull_model
+            ai_pull_model,
+            add_note,
+            list_notes,
+            delete_note
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
