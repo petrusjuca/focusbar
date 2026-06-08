@@ -68,7 +68,14 @@ impl Coach {
         }
 
         if let Some((app_name, title, start)) = current {
-            let cat = categorize(app_name, title);
+            // Categoria efetiva: override manual do usuário, ou regra.
+            let cat_owned = db
+                .lock()
+                .ok()
+                .and_then(|c| crate::db::app_category(&c, app_name).ok())
+                .flatten()
+                .unwrap_or_else(|| categorize(app_name, title).to_string());
+            let cat = cat_owned.as_str();
 
             // Procrastinação prolongada.
             if cat == "Procrastinação" {

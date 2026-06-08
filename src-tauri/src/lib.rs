@@ -22,7 +22,7 @@ use commands::reminders::{
 use commands::sessions::get_recent_sessions;
 use commands::summaries::{
     get_category_summary, get_daily_summary, get_day_insights, get_day_sessions,
-    get_weekly_summary,
+    get_weekly_summary, set_app_category,
 };
 use commands::tasks::{
     create_task_rule, delete_task_rule, get_current_task, get_task_summary, list_task_rules,
@@ -163,7 +163,8 @@ pub fn run() {
             ai_pull_model,
             add_note,
             list_notes,
-            delete_note
+            delete_note,
+            set_app_category
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

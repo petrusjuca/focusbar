@@ -20,6 +20,7 @@ export interface AppTotal {
   app_name: string;
   total_secs: number;
   session_count: number;
+  category: string;
 }
 
 export interface DailySummary {

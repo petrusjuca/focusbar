@@ -1,5 +1,5 @@
 use crate::ai;
-use crate::category::categorize;
+use crate::category::effective;
 use crate::commands::summaries::bounds_for_date_pub;
 use crate::db;
 use crate::redact;
@@ -72,13 +72,14 @@ fn collect_clean_lines(
     let (start, end) = bounds_for_date_pub(day);
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let sessions = db::sessions_in_range(&conn, start, end).map_err(|e| e.to_string())?;
+    let overrides = db::category_overrides(&conn).unwrap_or_default();
     let mut lines: Vec<String> = sessions
         .into_iter()
         .filter(|s| s.duration_secs >= 20)
         .filter(|s| !redact::is_excluded(&s.app_name, &s.title))
         .map(|s| {
             let title = redact::redact(&s.title);
-            let cat = categorize(&s.app_name, &title);
+            let cat = effective(&overrides, &s.app_name, &title);
             let mins = (s.duration_secs / 60).max(1);
             format!(
                 "{} · {}min · [{}] {} — {}",

@@ -418,6 +418,34 @@ h1 {
   }
 }
 
+.cat-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0;
+  border-top: 1px solid #efeff2;
+}
+
+.cat-edit-name {
+  flex: 1;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.cat-edit-dur {
+  font-size: 0.75rem;
+  color: #9b9ba0;
+}
+
+.cat-edit-row select {
+  border: 1px solid #d8d8dc;
+  border-radius: 8px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.8rem;
+}
+
 .cat-bar {
   display: flex;
   height: 26px;

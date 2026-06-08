@@ -31,6 +31,19 @@ const RULES: &[(&str, &[&str])] = &[
     ),
 ];
 
+use std::collections::HashMap;
+
+/// Categoria efetiva: usa o override manual do usuário (por nome de app) se
+/// existir; senão cai na regra automática.
+pub fn effective(overrides: &HashMap<String, String>, app_name: &str, title: &str) -> String {
+    if let Some(c) = overrides.get(app_name) {
+        if !c.is_empty() {
+            return c.clone();
+        }
+    }
+    categorize(app_name, title).to_string()
+}
+
 /// Categoria de uma sessão. Casa contra "app título" em minúsculo.
 pub fn categorize(app_name: &str, title: &str) -> &'static str {
     let hay = format!("{} {}", app_name, title).to_lowercase();

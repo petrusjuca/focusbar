@@ -1,4 +1,4 @@
-use crate::category::categorize;
+use crate::category::{categorize, effective};
 use crate::db;
 use crate::insights::day_insights;
 use crate::models::{CategoryTotal, DailySummary, DayTotal, FocusSession, Insight, WeeklySummary};
@@ -44,7 +44,13 @@ pub fn get_daily_summary(
     let (start, end, day_label) = bounds_for_date(parse_day(day.as_deref()));
     let conn = state.db.lock().map_err(|e| e.to_string())?;
 
-    let by_app = db::app_totals(&conn, start, end).map_err(|e| e.to_string())?;
+    let mut by_app = db::app_totals(&conn, start, end).map_err(|e| e.to_string())?;
+    // Preenche a categoria efetiva (override do usuário, ou regra pelo nome).
+    for a in &mut by_app {
+        if a.category.is_empty() {
+            a.category = categorize(&a.app_name, "").to_string();
+        }
+    }
     let longest_session = db::longest_session(&conn, start, end).map_err(|e| e.to_string())?;
 
     let total_secs: i64 = by_app.iter().map(|a| a.total_secs).sum();
@@ -79,22 +85,34 @@ pub fn get_category_summary(
     let (start, end, _) = bounds_for_date(parse_day(day.as_deref()));
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let sessions = db::sessions_in_range(&conn, start, end).map_err(|e| e.to_string())?;
+    let overrides = db::category_overrides(&conn).map_err(|e| e.to_string())?;
 
-    let mut totals: HashMap<&str, i64> = HashMap::new();
+    let mut totals: HashMap<String, i64> = HashMap::new();
     for s in &sessions {
-        let cat = categorize(&s.app_name, &s.title);
+        let cat = effective(&overrides, &s.app_name, &s.title);
         *totals.entry(cat).or_insert(0) += s.duration_secs;
     }
 
     let mut out: Vec<CategoryTotal> = totals
         .into_iter()
         .map(|(category, total_secs)| CategoryTotal {
-            category: category.to_string(),
+            category,
             total_secs,
         })
         .collect();
     out.sort_by(|a, b| b.total_secs.cmp(&a.total_secs));
     Ok(out)
+}
+
+/// Define a categoria manual de um app/site (ex.: "Trabalho"). Vazio = limpa.
+#[tauri::command]
+pub fn set_app_category(
+    state: State<AppState>,
+    app: String,
+    category: String,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::set_app_category(&conn, &app, &category).map_err(|e| e.to_string())
 }
 
 /// Dicas/insights do dia (o que melhorar), por regras.

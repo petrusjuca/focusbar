@@ -308,7 +308,7 @@ function App() {
           <DiaryView />
           <InsightsPanel insights={dayInsights} />
           {summary && <DailyView summary={summary} />}
-          <CategoryBreakdown data={categories} />
+          <CategoryBreakdown data={categories} apps={summary?.by_app ?? []} />
           <TaskBreakdown data={tasks} rules={taskRules} onChange={reloadTasks} />
           <FocusTimeline sessions={daySessions} />
 

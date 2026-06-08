@@ -3,6 +3,7 @@
 
 use crate::models::{AppTotal, FocusSession};
 use rusqlite::{params, Connection, OptionalExtension};
+use std::collections::HashMap;
 use std::path::Path;
 
 pub mod notes;
@@ -76,6 +77,39 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     )
 }
 
+/// Define (ou limpa, se vazio) a categoria manual de um app/site, por nome.
+pub fn set_app_category(conn: &Connection, name: &str, category: &str) -> rusqlite::Result<()> {
+    if category.trim().is_empty() {
+        conn.execute("UPDATE apps SET category = NULL WHERE name = ?1", params![name])?;
+    } else {
+        conn.execute(
+            "UPDATE apps SET category = ?1 WHERE name = ?2",
+            params![category, name],
+        )?;
+    }
+    Ok(())
+}
+
+/// Mapa nome→categoria das categorias manuais (overrides do usuário).
+pub fn category_overrides(conn: &Connection) -> rusqlite::Result<HashMap<String, String>> {
+    let mut stmt = conn
+        .prepare("SELECT name, category FROM apps WHERE category IS NOT NULL AND category != ''")?;
+    let rows = stmt.query_map([], |r| {
+        Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+    })?;
+    rows.collect()
+}
+
+/// Categoria manual de um app específico (se houver).
+pub fn app_category(conn: &Connection, name: &str) -> rusqlite::Result<Option<String>> {
+    conn.query_row(
+        "SELECT category FROM apps WHERE name = ?1 AND category IS NOT NULL AND category != '' LIMIT 1",
+        params![name],
+        |r| r.get(0),
+    )
+    .optional()
+}
+
 /// Resolve o id do app (cria se não existir). bundle vazio = "" para casar UNIQUE.
 pub fn get_or_create_app(conn: &Connection, name: &str, bundle: &str) -> rusqlite::Result<i64> {
     conn.execute(
@@ -131,7 +165,7 @@ pub fn recent_sessions(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<Fo
 /// Tempo total por app no intervalo [start_ts, end_ts), do maior pro menor.
 pub fn app_totals(conn: &Connection, start: i64, end: i64) -> rusqlite::Result<Vec<AppTotal>> {
     let mut stmt = conn.prepare(
-        "SELECT a.name, SUM(COALESCE(f.duration_secs, 0)) AS tot, COUNT(*) AS c
+        "SELECT a.name, SUM(COALESCE(f.duration_secs, 0)) AS tot, COUNT(*) AS c, a.category
          FROM focus_events f
          JOIN apps a ON a.id = f.app_id
          WHERE f.start_ts >= ?1 AND f.start_ts < ?2
@@ -143,6 +177,7 @@ pub fn app_totals(conn: &Connection, start: i64, end: i64) -> rusqlite::Result<V
             app_name: r.get(0)?,
             total_secs: r.get(1)?,
             session_count: r.get(2)?,
+            category: r.get::<_, Option<String>>(3)?.unwrap_or_default(),
         })
     })?;
     rows.collect()

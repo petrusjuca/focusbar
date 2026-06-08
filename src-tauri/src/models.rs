@@ -20,12 +20,13 @@ pub struct FocusSession {
     pub was_idle_trimmed: bool,
 }
 
-/// Total de tempo por app num intervalo.
+/// Total de tempo por app num intervalo. `category` = override do usuário ou "".
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppTotal {
     pub app_name: String,
     pub total_secs: i64,
     pub session_count: i64,
+    pub category: String,
 }
 
 /// Resumo de um dia.
