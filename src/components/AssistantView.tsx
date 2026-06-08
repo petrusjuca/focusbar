@@ -21,6 +21,7 @@ function renderMd(text: string) {
 
 export function AssistantView() {
   const [status, setStatus] = useState<AiStatus | null>(null);
+  const [starting, setStarting] = useState(false);
   const [pulling, setPulling] = useState(false);
   const [loading, setLoading] = useState(false);
   const [review, setReview] = useState<string>("");
@@ -38,6 +39,30 @@ export function AssistantView() {
   useEffect(() => {
     refreshStatus();
   }, []);
+
+  async function startOllama() {
+    setStarting(true);
+    try {
+      await invoke("start_ollama");
+    } catch {
+      /* ignore */
+    }
+    // dá um tempo do servidor subir e re-checa algumas vezes
+    for (let i = 0; i < 8; i++) {
+      await new Promise((r) => setTimeout(r, 1000));
+      try {
+        const s = await invoke<AiStatus>("ai_status");
+        if (s.running) {
+          setStatus(s);
+          break;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    setStarting(false);
+    refreshStatus();
+  }
 
   async function downloadModel() {
     setPulling(true);
@@ -105,14 +130,18 @@ export function AssistantView() {
             app Ollama</b> (ele precisa estar aberto). Pra conferir, acesse{" "}
             <b>http://localhost:11434</b> no navegador — deve dizer "Ollama is running".
           </p>
+          <button className="grant-btn" onClick={startOllama} disabled={starting}>
+            {starting ? "ligando o Ollama…" : "⚡ Ligar o Ollama"}
+          </button>
           <button
-            className="grant-btn"
+            className="link-btn"
+            style={{ marginLeft: 12 }}
             onClick={() => openUrl("https://ollama.com/download")}
           >
-            Baixar o Ollama
+            ainda não instalei
           </button>
           <button className="link-btn" style={{ marginLeft: 12 }} onClick={refreshStatus}>
-            já abri, verificar
+            verificar
           </button>
         </div>
       )}

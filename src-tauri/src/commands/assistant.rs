@@ -14,6 +14,33 @@ pub async fn ai_available() -> bool {
     ai::is_available().await
 }
 
+/// Tenta iniciar o Ollama (abre o app/serviço). Best-effort, não bloqueia.
+pub fn try_start_ollama() {
+    #[cfg(target_os = "macos")]
+    {
+        let _ = std::process::Command::new("open")
+            .args(["-a", "Ollama"])
+            .spawn();
+    }
+    #[cfg(target_os = "windows")]
+    {
+        let _ = std::process::Command::new("cmd")
+            .args(["/C", "start", "", "ollama", "app"])
+            .spawn();
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    {
+        let _ = std::process::Command::new("ollama").arg("serve").spawn();
+    }
+}
+
+/// Comando: liga o Ollama a partir da UI.
+#[tauri::command]
+pub fn start_ollama() -> Result<(), String> {
+    try_start_ollama();
+    Ok(())
+}
+
 #[derive(Serialize)]
 pub struct AiStatus {
     pub running: bool, // Ollama está rodando?

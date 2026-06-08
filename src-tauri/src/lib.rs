@@ -12,7 +12,7 @@ mod state;
 
 use capture::{ActiveWinProvider, WindowProvider};
 use commands::assistant::{
-    ai_available, ai_day_digest, ai_day_review, ai_pull_model, ai_status,
+    ai_available, ai_day_digest, ai_day_review, ai_pull_model, ai_status, start_ollama,
 };
 use commands::focus::{check_focus, get_focus, set_focus};
 use commands::notes::{add_note, delete_note, list_notes};
@@ -96,6 +96,9 @@ pub fn run() {
                 paused: paused.clone(),
             });
 
+            // Tenta ligar o Ollama sozinho (best-effort; se não tiver, ignora).
+            commands::assistant::try_start_ollama();
+
             // Sobe o sampler de foco e o scheduler de lembretes em background.
             capture::sampler::spawn(app.handle().clone(), db.clone(), paused);
             reminders::scheduler::spawn(app.handle().clone(), db);
@@ -163,6 +166,7 @@ pub fn run() {
             ai_day_digest,
             ai_status,
             ai_pull_model,
+            start_ollama,
             add_note,
             list_notes,
             delete_note,
