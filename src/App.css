@@ -63,6 +63,93 @@ h1 {
   color: #9b9ba0;
 }
 
+/* Janela compacta (mini mode) */
+.mini {
+  padding: 0.6rem 0.8rem;
+  height: 100vh;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.mini-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mini-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  color: #9b9ba0;
+}
+
+.mini-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #888;
+}
+
+.mini-app {
+  font-size: 1.15rem;
+  font-weight: 700;
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-title {
+  font-size: 0.72rem;
+  color: #8a8a90;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mini-bottom {
+  margin-top: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.mini-focus {
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.mini-pause {
+  border: 1px solid #d8d8dc;
+  background: #fff;
+  border-radius: 8px;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.mini-pause.paused {
+  background: #ff9500;
+  color: #fff;
+  border-color: #ff9500;
+}
+
+.mini-toggle {
+  border: 1px solid #d8d8dc;
+  background: #fff;
+  color: #444;
+  border-radius: 20px;
+  padding: 0.4rem 1rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .pause-btn {
   margin: 0 auto 1rem;
   display: block;
@@ -512,10 +599,19 @@ h1 {
 }
 
 @media (prefers-color-scheme: dark) {
-  .pause-btn {
+  .pause-btn,
+  .mini-toggle,
+  .mini-pause {
     background: #2a2a2e;
     color: #ccc;
     border-color: #44444a;
+  }
+  .mini-focus {
+    color: #b8b8be;
+  }
+  .mini-pause.paused {
+    background: #ff9500;
+    color: #fff;
   }
   .ai-card {
     background: linear-gradient(135deg, #2e2640, #26303f);

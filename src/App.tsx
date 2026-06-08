@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { LogicalSize } from "@tauri-apps/api/dpi";
 import type {
   ActiveWindow,
   CategoryTotal,
@@ -19,6 +21,7 @@ import { TaskBreakdown } from "./components/TaskBreakdown";
 import { InsightsPanel } from "./components/InsightsPanel";
 import { RemindersView } from "./components/RemindersView";
 import { AssistantView } from "./components/AssistantView";
+import { MiniView } from "./components/MiniView";
 import "./App.css";
 
 type Tab = "hoje" | "semana" | "assistente" | "lembretes";
@@ -42,6 +45,7 @@ function App() {
   const [hasAccess, setHasAccess] = useState<boolean>(true);
   const [autostart, setAutostart] = useState<boolean>(false);
   const [paused, setPaused] = useState<boolean>(false);
+  const [mini, setMini] = useState<boolean>(false);
 
   useEffect(() => {
     let alive = true;
@@ -108,6 +112,28 @@ function App() {
     }
   }
 
+  async function enterMini() {
+    try {
+      const w = getCurrentWindow();
+      await w.setSize(new LogicalSize(300, 175));
+      await w.setAlwaysOnTop(true);
+      setMini(true);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
+  async function exitMini() {
+    try {
+      const w = getCurrentWindow();
+      await w.setAlwaysOnTop(false);
+      await w.setSize(new LogicalSize(680, 820));
+      setMini(false);
+    } catch (e) {
+      setError(String(e));
+    }
+  }
+
   async function grant() {
     try {
       await invoke<boolean>("request_accessibility");
@@ -155,6 +181,18 @@ function App() {
     } catch (e) {
       setError(String(e));
     }
+  }
+
+  if (mini) {
+    return (
+      <MiniView
+        win={win}
+        summary={summary}
+        paused={paused}
+        onExpand={exitMini}
+        onTogglePause={togglePause}
+      />
+    );
   }
 
   return (
@@ -308,6 +346,9 @@ function App() {
       )}
 
       <footer className="footer">
+        <button className="mini-toggle" onClick={enterMini}>
+          ⤡ Janela pequena (fica no canto da tela)
+        </button>
         <label className="autostart">
           <input
             type="checkbox"
