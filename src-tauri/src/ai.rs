@@ -73,6 +73,26 @@ pub async fn has_model() -> bool {
     }
 }
 
+/// Julga se a janela atual ajuda no foco declarado ou é distração.
+/// Retorna (no_foco, motivo_curto). Best-effort (3B pode errar).
+pub async fn on_task_check(
+    focus: &str,
+    app: &str,
+    title: &str,
+) -> Result<(bool, String), String> {
+    let prompt = format!(
+        "Você ajuda alguém com TDAH a manter o foco. Seja direto.\n\
+Foco/tarefa atual: \"{focus}\".\n\
+Agora a pessoa está em: {app} — {title}\n\
+Isso AJUDA nessa tarefa ou é DISTRAÇÃO? Responda em UMA linha curta, \
+começando exatamente com SIM (ajuda) ou NAO (distração), depois um motivo bem curto."
+    );
+    let resp = generate(prompt).await?;
+    let up = resp.trim().to_uppercase();
+    let on_task = !(up.starts_with("NAO") || up.starts_with("NÃO") || up.starts_with("N,"));
+    Ok((on_task, resp.trim().to_string()))
+}
+
 /// Baixa o modelo via Ollama (bloqueia até terminar — pode levar minutos).
 pub async fn pull_model() -> Result<(), String> {
     let body = serde_json::json!({ "name": model(), "stream": false });

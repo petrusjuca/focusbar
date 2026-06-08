@@ -24,6 +24,7 @@ import { AssistantView } from "./components/AssistantView";
 import { MiniView } from "./components/MiniView";
 import { DiaryView } from "./components/DiaryView";
 import { TodoView } from "./components/TodoView";
+import { FocusBar } from "./components/FocusBar";
 import "./App.css";
 
 type Tab = "hoje" | "tarefas" | "semana" | "assistente" | "lembretes";
@@ -316,6 +317,7 @@ function App() {
         weekly && <WeeklyView summary={weekly} />
       ) : (
         <>
+          <FocusBar />
           <DiaryView />
           <InsightsPanel insights={dayInsights} />
           {summary && <DailyView summary={summary} />}

@@ -53,6 +53,12 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             created_at    INTEGER NOT NULL
         );
 
+        CREATE TABLE IF NOT EXISTS focus_now (
+            id     INTEGER PRIMARY KEY CHECK (id = 1),
+            text   TEXT NOT NULL,
+            set_at INTEGER NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS todos (
             id         INTEGER PRIMARY KEY,
             text       TEXT NOT NULL,
@@ -84,6 +90,28 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             PRIMARY KEY(day, app_id)
         );",
     )
+}
+
+/// Define o "foco atual" (no que a pessoa está tentando trabalhar agora).
+pub fn set_focus(conn: &Connection, text: &str, now: i64) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO focus_now(id, text, set_at) VALUES (1, ?1, ?2)
+         ON CONFLICT(id) DO UPDATE SET text = excluded.text, set_at = excluded.set_at",
+        params![text, now],
+    )?;
+    Ok(())
+}
+
+/// Foco atual, se houver.
+pub fn get_focus(conn: &Connection) -> rusqlite::Result<Option<String>> {
+    conn.query_row("SELECT text FROM focus_now WHERE id = 1", [], |r| r.get(0))
+        .optional()
+}
+
+/// Limpa o foco atual.
+pub fn clear_focus(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM focus_now WHERE id = 1", [])?;
+    Ok(())
 }
 
 /// Define (ou limpa, se vazio) a categoria manual de um app/site, por nome.

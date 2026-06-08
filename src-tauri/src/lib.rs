@@ -14,6 +14,7 @@ use capture::{ActiveWinProvider, WindowProvider};
 use commands::assistant::{
     ai_available, ai_day_digest, ai_day_review, ai_pull_model, ai_status,
 };
+use commands::focus::{check_focus, get_focus, set_focus};
 use commands::notes::{add_note, delete_note, list_notes};
 use commands::todos::{add_todo, delete_todo, list_todos, toggle_todo};
 use commands::permissions::{check_accessibility, request_accessibility};
@@ -169,7 +170,10 @@ pub fn run() {
             add_todo,
             list_todos,
             toggle_todo,
-            delete_todo
+            delete_todo,
+            set_focus,
+            get_focus,
+            check_focus
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

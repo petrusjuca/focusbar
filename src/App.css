@@ -319,6 +319,67 @@ h1 {
   margin: 0 0 0.8rem;
 }
 
+.focusbar {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e0e0e4;
+  border-radius: 12px;
+  padding: 0.6rem 0.8rem;
+  margin-top: 1.5rem;
+  text-align: left;
+}
+
+.focusbar-input {
+  flex: 1;
+  border: none;
+  font-size: 0.92rem;
+  outline: none;
+  background: transparent;
+}
+
+.focusbar.set {
+  flex-direction: column;
+  align-items: stretch;
+  border-left: 4px solid #c7c7cc;
+}
+
+.focusbar.set.ontask {
+  border-left-color: #34c759;
+}
+
+.focusbar.set.offtask {
+  border-left-color: #ff9500;
+}
+
+.focusbar-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.focusbar-goal {
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.focusbar-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-shrink: 0;
+}
+
+.focusbar-status {
+  margin-top: 0.4rem;
+  font-size: 0.82rem;
+  color: #6b6b70;
+}
+
 .tabs {
   display: flex;
   gap: 0.4rem;
@@ -781,9 +842,23 @@ h1 {
   .ai-card-text {
     color: #b8b8be;
   }
-  .reminder-form {
+  .reminder-form,
+  .focusbar {
+    background: #2a2a2e;
+    border-color: #44444a;
+    box-shadow: none;
+  }
+  .focusbar-input {
+    color: #f5f5f7;
+  }
+  .todo-row {
     background: #2a2a2e;
     box-shadow: none;
+  }
+  .mini-todo-input {
+    background: #1f1f22;
+    color: #f5f5f7;
+    border-color: #44444a;
   }
   .rm-text,
   .rm-row select,

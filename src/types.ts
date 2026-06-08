@@ -79,6 +79,13 @@ export interface Todo {
   done_at: number | null;
 }
 
+export interface FocusCheck {
+  focus: string | null;
+  app: string | null;
+  on_task: boolean | null;
+  reason: string;
+}
+
 export interface Reminder {
   id: number;
   text: string;
