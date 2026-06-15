@@ -134,24 +134,45 @@ export function AssistantView() {
       {/* Estado 1: Ollama não está rodando */}
       {status && !status.running && (
         <div className="permission-banner">
-          <div className="perm-title">A IA local não está ativa</div>
+          <div className="perm-title">Ligar a IA local (Ollama) — 3 passos</div>
           <p className="perm-text">
-            A IA local roda pelo <b>Ollama</b> (grátis). Se já instalou, <b>abra o
-            app Ollama</b> (ele precisa estar aberto). Pra conferir, acesse{" "}
-            <b>http://localhost:11434</b> no navegador — deve dizer "Ollama is running".
+            A IA local roda pelo <b>Ollama</b> (grátis, fica 100% no seu PC). Faça
+            uma vez:
           </p>
-          <button className="grant-btn" onClick={startOllama} disabled={starting}>
-            {starting ? "ligando o Ollama…" : "⚡ Ligar o Ollama"}
+          <ol className="perm-text" style={{ margin: "0 0 0.6rem 1.1rem", padding: 0 }}>
+            <li>
+              <b>Baixe e instale o Ollama</b> (botão abaixo). Depois de instalar ele
+              <b> roda sozinho</b> — fica na bandeja, não precisa abrir nada.
+            </li>
+            <li>
+              Volte aqui e clique <b>verificar</b> (deve ficar verde). Se já instalou
+              e não conectar, clique <b>tentar ligar</b>.
+            </li>
+            <li>
+              Clique <b>baixar a IA</b> (aparece no próximo passo, ~2GB, uma vez só).
+            </li>
+          </ol>
+          <p className="perm-text" style={{ fontSize: "0.8rem", opacity: 0.8 }}>
+            Conferir manualmente: abra <b>http://localhost:11434</b> no navegador —
+            deve dizer "Ollama is running".
+          </p>
+          <button
+            className="grant-btn"
+            onClick={() => openUrl("https://ollama.com/download")}
+          >
+            ⬇ Baixar o Ollama (grátis)
+          </button>
+          <button className="grant-btn" style={{ marginLeft: 12 }} onClick={refreshStatus}>
+            ✓ verificar
           </button>
           <button
             className="link-btn"
             style={{ marginLeft: 12 }}
-            onClick={() => openUrl("https://ollama.com/download")}
+            onClick={startOllama}
+            disabled={starting}
+            title="Se já instalou e mesmo assim não conecta"
           >
-            ainda não instalei
-          </button>
-          <button className="link-btn" style={{ marginLeft: 12 }} onClick={refreshStatus}>
-            verificar
+            {starting ? "ligando…" : "tentar ligar"}
           </button>
         </div>
       )}

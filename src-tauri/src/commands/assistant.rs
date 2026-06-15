@@ -25,8 +25,15 @@ pub fn try_start_ollama() {
     }
     #[cfg(target_os = "windows")]
     {
-        let _ = std::process::Command::new("cmd")
-            .args(["/C", "start", "", "ollama", "app"])
+        // Sobe o servidor do Ollama (API em 127.0.0.1:11434). `ollama app` NÃO
+        // existe como subcomando — o certo é `serve` (era esse o bug: o botão
+        // não fazia nada). Se o app de bandeja já estiver rodando, o `serve` só
+        // sai (porta em uso) — inofensivo. CREATE_NO_WINDOW evita flash de console.
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let _ = std::process::Command::new("ollama")
+            .arg("serve")
+            .creation_flags(CREATE_NO_WINDOW)
             .spawn();
     }
     #[cfg(not(any(target_os = "macos", target_os = "windows")))]
