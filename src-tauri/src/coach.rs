@@ -4,7 +4,7 @@
 
 use crate::category::categorize;
 use crate::insights;
-use chrono::{Local, NaiveDate, TimeZone, Timelike};
+use chrono::{Local, NaiveDate, Timelike};
 use rusqlite::Connection;
 use std::collections::{HashMap, VecDeque};
 use std::sync::{Arc, Mutex};
@@ -125,11 +125,9 @@ impl Coach {
 
 /// Monta o corpo do resumo de fim de dia.
 fn build_eod(db: &Arc<Mutex<Connection>>, date: NaiveDate) -> Option<String> {
-    let start = Local
-        .from_local_datetime(&date.and_hms_opt(0, 0, 0)?)
-        .earliest()?
-        .timestamp();
-    let end = start + 86_400;
+    // Reusa a fronteira de dia robusta a DST (não pula o resumo se 00:00 não existir).
+    let label = date.format("%Y-%m-%d").to_string();
+    let (start, end) = crate::commands::summaries::bounds_for_date_pub(Some(&label));
     let conn = db.lock().ok()?;
     let tips = insights::day_insights(&conn, start, end).ok()?;
     let first = tips.first()?;

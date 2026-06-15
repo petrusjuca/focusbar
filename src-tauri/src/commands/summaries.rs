@@ -3,24 +3,31 @@ use crate::db;
 use crate::insights::day_insights;
 use crate::models::{CategoryTotal, DailySummary, DayTotal, FocusSession, Insight, WeeklySummary};
 use crate::state::AppState;
-use chrono::{Duration, Local, NaiveDate, TimeZone};
+use chrono::{Duration, Local, LocalResult, NaiveDate, TimeZone};
 use std::collections::HashMap;
 use tauri::State;
 
-/// Início (epoch) do dia local para uma data.
+/// Início (epoch) do dia local para uma data. Robusto a saltos de horário de
+/// verão à meia-noite: se 00:00 não existir (spring-forward), anda minuto a minuto
+/// até o 1º instante válido — nunca cai em epoch 0 (que zerava o dia inteiro).
 fn day_start_ts(date: NaiveDate) -> i64 {
-    let naive_start = date.and_hms_opt(0, 0, 0).unwrap();
-    Local
-        .from_local_datetime(&naive_start)
-        .earliest()
-        .map(|dt| dt.timestamp())
-        .unwrap_or(0)
+    let naive = date.and_hms_opt(0, 0, 0).unwrap();
+    match Local.from_local_datetime(&naive) {
+        LocalResult::Single(dt) => dt.timestamp(),
+        LocalResult::Ambiguous(dt, _) => dt.timestamp(), // usa a 1ª ocorrência
+        LocalResult::None => (1..=120)
+            .find_map(|m| Local.from_local_datetime(&(naive + Duration::minutes(m))).earliest())
+            .map(|dt| dt.timestamp())
+            .unwrap_or_else(|| naive.and_utc().timestamp()),
+    }
 }
 
-/// Bounds [start, end) e label de uma data.
+/// Bounds [start, end) e label de uma data. `end` é o início do dia SEGUINTE,
+/// então dias de DST (23h/25h) ficam corretos — não somamos 86_400 fixo.
 fn bounds_for_date(date: NaiveDate) -> (i64, i64, String) {
     let start = day_start_ts(date);
-    (start, start + 86_400, date.format("%Y-%m-%d").to_string())
+    let end = day_start_ts(date + Duration::days(1));
+    (start, end, date.format("%Y-%m-%d").to_string())
 }
 
 /// Parseia 'YYYY-MM-DD' ou usa hoje.
@@ -148,7 +155,7 @@ pub fn get_weekly_summary(
 
     // Agregado da semana inteira por app.
     let week_start = day_start_ts(last - Duration::days(6));
-    let week_end = day_start_ts(last) + 86_400;
+    let week_end = day_start_ts(last + Duration::days(1));
     let by_app = db::app_totals(&conn, week_start, week_end).map_err(|e| e.to_string())?;
     let total_secs: i64 = by_app.iter().map(|a| a.total_secs).sum();
 
@@ -157,4 +164,35 @@ pub fn get_weekly_summary(
         total_secs,
         by_app,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn day_window_is_24h() {
+        let (start, end) = bounds_for_date_pub(Some("2026-01-15"));
+        assert_eq!(end - start, 86_400);
+        assert!(start > 0);
+    }
+
+    #[test]
+    fn invalid_date_falls_back_to_today() {
+        let (start, end) = bounds_for_date_pub(Some("nao-e-data"));
+        assert_eq!(end - start, 86_400);
+        assert!(start > 0);
+    }
+
+    #[test]
+    fn none_uses_today() {
+        let (start, end) = bounds_for_date_pub(None);
+        assert_eq!(end - start, 86_400);
+    }
+
+    #[test]
+    fn parse_day_roundtrips_label() {
+        let (_, _, label) = bounds_for_date(parse_day(Some("2026-03-09")));
+        assert_eq!(label, "2026-03-09");
+    }
 }

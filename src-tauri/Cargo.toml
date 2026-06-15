@@ -1,6 +1,6 @@
 [package]
 name = "focusbar"
-version = "0.2.10"
+version = "0.3.0"
 description = "Assistente de produtividade local"
 authors = ["you"]
 edition = "2021"
@@ -18,7 +18,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+tauri = { version = "2", features = ["macos-private-api", "tray-icon"] }
 tauri-plugin-opener = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-autostart = "2"
@@ -30,6 +30,10 @@ user-idle = "0.6"
 chrono = "0.4"
 reqwest = { version = "0.12", features = ["json"] }
 regex = "1"
+tauri-plugin-clipboard-manager = "2.3.2"
+xcap = "0.9.6"
+image = "0.25"
+uni-ocr = "0.1.5"
 
 # Captura de título da janela no macOS via API de Acessibilidade (AX),
 # e checagem/solicitação da permissão de Acessibilidade. Só compila no macOS.

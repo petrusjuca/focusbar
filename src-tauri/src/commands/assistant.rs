@@ -4,8 +4,9 @@ use crate::commands::summaries::bounds_for_date_pub;
 use crate::db;
 use crate::redact;
 use crate::state::AppState;
-use chrono::{Local, TimeZone};
+use chrono::{Datelike, Local, NaiveDate, TimeZone};
 use serde::Serialize;
+use std::collections::HashMap;
 use tauri::State;
 
 /// Ollama/Llama está disponível?
@@ -90,38 +91,120 @@ fn intentions_block(state: &State<'_, AppState>, day: Option<&str>) -> String {
     }
 }
 
-/// Coleta as sessões do dia já LIMPAS (porteiro: redação + zonas de exclusão),
-/// formatadas em linhas. Síncrono — não segura lock em await.
-fn collect_clean_lines(
-    state: &State<'_, AppState>,
-    day: Option<&str>,
-) -> Result<Vec<String>, String> {
+/// Dados do dia já limpos (porteiro: redação + zonas de exclusão) + agregados,
+/// pra montar um resumo com contexto. Síncrono — não segura lock em await.
+struct DayData {
+    lines: Vec<String>,
+    total_secs: i64,
+    total_count: usize,
+    top_cats: Vec<(String, i64)>,
+}
+
+fn fmt_hm(secs: i64) -> String {
+    let m = secs / 60;
+    if m < 60 {
+        format!("{}min", m)
+    } else {
+        format!("{}h{:02}", m / 60, m % 60)
+    }
+}
+
+fn weekday_pt(date: NaiveDate) -> &'static str {
+    use chrono::Weekday::*;
+    match date.weekday() {
+        Mon => "segunda",
+        Tue => "terça",
+        Wed => "quarta",
+        Thu => "quinta",
+        Fri => "sexta",
+        Sat => "sábado",
+        Sun => "domingo",
+    }
+}
+
+/// Mensagem de "sem dados" que respeita o dia escolhido (não diz "hoje" pra dia passado).
+fn empty_msg(day: Option<&str>) -> String {
+    match day {
+        Some(d) => format!("Sem dados suficientes em {} pra analisar.", d),
+        None => "Sem dados suficientes hoje pra analisar.".into(),
+    }
+}
+
+fn collect_day(state: &State<'_, AppState>, day: Option<&str>) -> Result<DayData, String> {
     let (start, end) = bounds_for_date_pub(day);
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     let sessions = db::sessions_in_range(&conn, start, end).map_err(|e| e.to_string())?;
     let overrides = db::category_overrides(&conn).unwrap_or_default();
-    let mut lines: Vec<String> = sessions
+    let kept: Vec<_> = sessions
         .into_iter()
         .filter(|s| s.duration_secs >= 20)
         .filter(|s| !redact::is_excluded(&s.app_name, &s.title))
-        .map(|s| {
-            let title = redact::redact(&s.title);
-            let cat = effective(&overrides, &s.app_name, &title);
-            let mins = (s.duration_secs / 60).max(1);
-            format!(
-                "{} · {}min · [{}] {} — {}",
-                hhmm(s.start_ts),
-                mins,
-                cat,
-                s.app_name,
-                title
-            )
-        })
         .collect();
+
+    let mut total_secs = 0i64;
+    let mut cats: HashMap<String, i64> = HashMap::new();
+    let mut lines: Vec<String> = Vec::with_capacity(kept.len());
+    for s in &kept {
+        let title = redact::redact(&s.title);
+        let cat = effective(&overrides, &s.app_name, &title);
+        total_secs += s.duration_secs;
+        *cats.entry(cat.clone()).or_insert(0) += s.duration_secs;
+        let mins = (s.duration_secs / 60).max(1);
+        lines.push(format!(
+            "{} · {}min · [{}] {} — {}",
+            hhmm(s.start_ts),
+            mins,
+            cat,
+            s.app_name,
+            title
+        ));
+    }
+    let total_count = lines.len();
     if lines.len() > 120 {
         lines.truncate(120);
     }
-    Ok(lines)
+    let mut top_cats: Vec<(String, i64)> = cats.into_iter().collect();
+    top_cats.sort_by(|a, b| b.1.cmp(&a.1));
+    top_cats.truncate(4);
+
+    Ok(DayData {
+        lines,
+        total_secs,
+        total_count,
+        top_cats,
+    })
+}
+
+/// Cabeçalho-resumo: data por extenso + tempo total + top categorias + aviso de corte.
+fn day_header(day: Option<&str>, d: &DayData) -> String {
+    let label = day_label(day);
+    let weekday = NaiveDate::parse_from_str(&label, "%Y-%m-%d")
+        .map(weekday_pt)
+        .unwrap_or("");
+    let cats = d
+        .top_cats
+        .iter()
+        .map(|(c, s)| format!("{} {}min", c, s / 60))
+        .collect::<Vec<_>>()
+        .join(" · ");
+    let trunc = if d.total_count > d.lines.len() {
+        format!(
+            " (mostrando as {} primeiras de {})",
+            d.lines.len(),
+            d.total_count
+        )
+    } else {
+        String::new()
+    };
+    format!(
+        "Dia: {} ({}) · {} de uso · {} sessões{}\nTop categorias: {}\n",
+        label,
+        weekday,
+        fmt_hm(d.total_secs),
+        d.total_count,
+        trunc,
+        cats
+    )
 }
 
 /// Resumo do dia gerado pelo Llama LOCAL: o que fez + como foi + 1 melhoria.
@@ -130,16 +213,17 @@ pub async fn ai_day_review(
     state: State<'_, AppState>,
     day: Option<String>,
 ) -> Result<String, String> {
-    let lines = collect_clean_lines(&state, day.as_deref())?;
-    if lines.is_empty() {
-        return Err("Sem dados suficientes hoje pra analisar.".into());
+    let d = collect_day(&state, day.as_deref())?;
+    if d.lines.is_empty() {
+        return Err(empty_msg(day.as_deref()));
     }
     let intentions = intentions_block(&state, day.as_deref());
-    let joined = lines.join("\n");
+    let header = day_header(day.as_deref(), &d);
+    let joined = d.lines.join("\n");
     let prompt = format!(
         "Você é um assistente de produtividade gentil e direto, para uma pessoa com TDAH. \
 Tom NUNCA punitivo. Responda em português do Brasil, curto e honesto.\n\n\
-{intentions}Sessões de hoje (horário · duração · [categoria] · app/site — janela/URL):\n\n{joined}\n\n\
+{header}\n{intentions}Sessões (horário · duração · [categoria] · app/site — janela/URL):\n\n{joined}\n\n\
 Use as URLs e títulos pra identificar a ATIVIDADE CONCRETA, não só o nome do app.\n\n\
 Responda em markdown com estas seções:\n\
 ## O que você fez\n(3 a 5 blocos de atividade concreta, com horário)\n\
@@ -157,17 +241,18 @@ pub async fn ai_day_digest(
     state: State<'_, AppState>,
     day: Option<String>,
 ) -> Result<String, String> {
-    let lines = collect_clean_lines(&state, day.as_deref())?;
-    if lines.is_empty() {
-        return Err("Sem dados suficientes hoje.".into());
+    let d = collect_day(&state, day.as_deref())?;
+    if d.lines.is_empty() {
+        return Err(empty_msg(day.as_deref()));
     }
     let intentions = intentions_block(&state, day.as_deref());
-    let joined = lines.join("\n");
+    let header = day_header(day.as_deref(), &d);
+    let joined = d.lines.join("\n");
     Ok(format!(
         "Você é meu assistente de produtividade (tenho TDAH). Analise meu dia de forma gentil \
 e honesta, nunca punitiva. Identifique a atividade concreta pelos sites/títulos. Me diga: \
 (1) o que fiz em blocos, (2) como foi meu foco, (3) onde perdi tempo sem perceber, \
 (4) se bati minhas intenções, (5) UMA melhoria pra amanhã.\n\n\
-{intentions}Sessões de hoje (horário · duração · [categoria] · app/site — janela/URL):\n\n{joined}"
+{header}\n{intentions}Sessões (horário · duração · [categoria] · app/site — janela/URL):\n\n{joined}"
     ))
 }

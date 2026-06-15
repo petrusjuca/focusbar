@@ -3,10 +3,33 @@
 
 use serde::{Deserialize, Serialize};
 
-/// URL do Ollama. Local por padrão; aponte pra VPS via env FOCUSBAR_LLM_URL
-/// (ex.: http://127.0.0.1:11434 num túnel SSH pra VPS). Sem recompilar.
+/// URL do Ollama. **Local-first por padrão.** Para usar uma VPS, faça um túnel SSH
+/// que escuta em `127.0.0.1` (continua loopback) — NÃO aponte FOCUSBAR_LLM_URL pra
+/// um host remoto em http puro. Se mesmo assim apontar pra host não-loopback, só vale
+/// com `https://` E `FOCUSBAR_LLM_REMOTE_OK=1`; caso contrário cai de volta no localhost
+/// (dados não saem da máquina sem opt-in explícito).
 fn base() -> String {
-    std::env::var("FOCUSBAR_LLM_URL").unwrap_or_else(|_| "http://localhost:11434".to_string())
+    let url = std::env::var("FOCUSBAR_LLM_URL")
+        .unwrap_or_else(|_| "http://localhost:11434".to_string());
+    if is_loopback(&url) {
+        return url;
+    }
+    let remote_ok = std::env::var("FOCUSBAR_LLM_REMOTE_OK")
+        .map(|v| v == "1")
+        .unwrap_or(false);
+    if remote_ok && url.starts_with("https://") {
+        url
+    } else {
+        // Recusa silenciosa: volta pro local em vez de mandar dados pra fora.
+        "http://localhost:11434".to_string()
+    }
+}
+
+/// O host da URL é loopback (a máquina local)?
+fn is_loopback(url: &str) -> bool {
+    let host = url.split("://").nth(1).unwrap_or(url);
+    let host = host.split('/').next().unwrap_or("");
+    host.starts_with("localhost") || host.starts_with("127.0.0.1") || host.starts_with("[::1]")
 }
 
 /// Modelo. Local: llama3.2:3b. Na VPS dá pra usar um maior via FOCUSBAR_LLM_MODEL.
@@ -79,13 +102,25 @@ pub async fn on_task_check(
     focus: &str,
     app: &str,
     title: &str,
+    extra: &str,
 ) -> Result<(bool, String), String> {
+    // "Olhos" Estágio 1: trecho do texto visível na janela (lido pela AX).
+    let screen = if extra.trim().is_empty() {
+        String::new()
+    } else {
+        format!("Texto visível na janela (use pra entender o assunto real): \"{}\"\n", extra.trim())
+    };
     let prompt = format!(
-        "Você ajuda alguém com TDAH a manter o foco. Seja direto.\n\
+        "Você ajuda alguém com TDAH a manter o foco. Julgue pelo CONTEÚDO concreto: \
+o título E o texto visível dizem o ASSUNTO real — use isso, não o nome do app ou site. \
+Exemplos: um vídeo 'Cálculo 1 - máximos e mínimos por derivada' no YouTube AJUDA quem \
+quer estudar cálculo; um 'Nintendo Direct' ou uma novela é DISTRAÇÃO; um doc com o nome \
+do projeto AJUDA.\n\
 Foco/tarefa atual: \"{focus}\".\n\
-Agora a pessoa está em: {app} — {title}\n\
-Isso AJUDA nessa tarefa ou é DISTRAÇÃO? Responda em UMA linha curta, \
-começando exatamente com SIM (ajuda) ou NAO (distração), depois um motivo bem curto."
+Atividade agora: {app} — {title}\n\
+{screen}\
+Isso ajuda no foco ou é distração? Responda em UMA linha curta começando exatamente com \
+SIM (ajuda) ou NAO (distração), e um motivo bem curto citando o ASSUNTO que você viu."
     );
     let resp = generate(prompt).await?;
     let up = resp.trim().to_uppercase();

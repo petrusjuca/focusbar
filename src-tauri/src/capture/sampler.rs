@@ -42,6 +42,12 @@ fn idle_secs() -> i64 {
         .unwrap_or(0)
 }
 
+/// Apps que NÃO são foco real (tela de bloqueio, servidor de janelas) — ruído.
+fn is_system_noise(app: &str) -> bool {
+    let a = app.to_lowercase();
+    a == "loginwindow" || a == "windowserver" || a == "screensaverengine"
+}
+
 pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>) {
     thread::spawn(move || {
         let provider = ActiveWinProvider;
@@ -55,10 +61,11 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
             let is_paused = paused.load(Ordering::Relaxed);
 
             // Pausado ou ocioso = sem foco (mas pausado NÃO é idle-trimmed).
+            // Ignora "loginwindow" e cia. — tela de bloqueio não é foco real.
             let win = if is_paused || is_idle {
                 None
             } else {
-                provider.current()
+                provider.current().filter(|w| !is_system_noise(&w.app_name))
             };
 
             let new_key = win.as_ref().map(|w| (w.app_name.as_str(), w.title.as_str()));
@@ -94,7 +101,8 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
                     let (label_app, stored_title, bundle) = match &url {
                         Some(u) => (
                             browser::site_name(u).unwrap_or_else(|| w.app_name.clone()),
-                            format!("{} — {}", w.title, u),
+                            // URL limpa: sem query/fragment (onde vivem tokens/PII).
+                            format!("{} — {}", w.title, browser::clean_url(u)),
                             String::new(), // site agrupa independente do navegador
                         ),
                         None => (

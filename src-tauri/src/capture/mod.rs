@@ -5,6 +5,19 @@ mod macos;
 
 pub mod browser;
 pub mod sampler;
+pub mod screen;
+
+/// "Olhos" Estágio 1: texto visível da janela em foco via Acessibilidade (sem
+/// screenshot). macOS por enquanto; Windows (UI Automation) é o próximo passo.
+#[cfg(target_os = "macos")]
+pub fn focused_text(pid: i32) -> Option<String> {
+    macos::focused_window_text(pid)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn focused_text(_pid: i32) -> Option<String> {
+    None
+}
 
 /// Abstração de captura da janela em foco. Mantém o resto do app independente
 /// da crate concreta usada por baixo — dá pra trocar por uma implementação

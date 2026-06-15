@@ -28,3 +28,17 @@ pub fn request_accessibility() -> bool {
         true
     }
 }
+
+/// True se há permissão de Gravação de Tela (necessária pro OCR de pixel).
+/// No Windows não é exigida → sempre true.
+#[tauri::command]
+pub fn check_screen_recording() -> bool {
+    crate::capture::screen::screen_recording_granted()
+}
+
+/// Dispara o diálogo de permissão de Gravação de Tela (macOS). Após conceder,
+/// o app precisa ser reiniciado pra valer.
+#[tauri::command]
+pub fn request_screen_recording() -> bool {
+    crate::capture::screen::request_screen_recording()
+}

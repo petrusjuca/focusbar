@@ -54,3 +54,46 @@ pub fn categorize(app_name: &str, title: &str) -> &'static str {
     }
     "Outro"
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rules_match_expected_categories() {
+        assert_eq!(categorize("YouTube", "gameplay zerando jogo"), "Procrastinação");
+        assert_eq!(categorize("Visual Studio Code", "main.rs"), "Ferramenta");
+        assert_eq!(categorize("Notion", "roadmap do produto"), "Trabalho");
+        assert_eq!(categorize("AppDesconhecido", "janela qualquer"), "Outro");
+    }
+
+    #[test]
+    fn priority_trabalho_beats_later_rules() {
+        // Título com palavra de Trabalho (notion) e de Procrastinação (youtube):
+        // a primeira regra na ordem de prioridade vence.
+        assert_eq!(
+            categorize("Chrome", "notion e youtube na mesma aba"),
+            "Trabalho"
+        );
+    }
+
+    #[test]
+    fn matching_is_case_insensitive() {
+        assert_eq!(categorize("DISCORD", ""), "Procrastinação");
+    }
+
+    #[test]
+    fn effective_prefers_user_override() {
+        let mut ov = HashMap::new();
+        ov.insert("YouTube".to_string(), "Trabalho".to_string());
+        // Sem override seria Procrastinação; o override do usuário manda.
+        assert_eq!(effective(&ov, "YouTube", "qualquer vídeo"), "Trabalho");
+    }
+
+    #[test]
+    fn effective_ignores_empty_override_and_falls_back() {
+        let mut ov = HashMap::new();
+        ov.insert("YouTube".to_string(), String::new());
+        assert_eq!(effective(&ov, "YouTube", "vídeo"), "Procrastinação");
+    }
+}

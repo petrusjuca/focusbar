@@ -1,3 +1,7 @@
+// Segurança de concorrência: nunca segurar o lock do DB (std::sync::Mutex)
+// atravessando um `.await` — travaria o sampler. Enforçado sob `cargo clippy`.
+#![deny(clippy::await_holding_lock)]
+
 mod ai;
 mod capture;
 mod category;
@@ -14,14 +18,19 @@ use capture::{ActiveWinProvider, WindowProvider};
 use commands::assistant::{
     ai_available, ai_day_digest, ai_day_review, ai_pull_model, ai_status, start_ollama,
 };
-use commands::focus::{check_focus, get_focus, set_focus};
+use commands::config::{
+    get_focus_time, get_ocr_enabled, log_focus_time, set_ocr_enabled,
+};
+use commands::focus::{check_focus, get_focus, set_focus, set_focus_judgment};
 use commands::notes::{add_note, delete_note, list_notes};
 use commands::todos::{add_todo, delete_todo, list_todos, toggle_todo};
-use commands::permissions::{check_accessibility, request_accessibility};
+use commands::permissions::{
+    check_accessibility, check_screen_recording, request_accessibility, request_screen_recording,
+};
 use commands::reminders::{
     create_reminder, delete_reminder, list_reminders, set_reminder_enabled,
 };
-use commands::sessions::get_recent_sessions;
+use commands::sessions::{delete_app_sessions, delete_session, get_recent_sessions};
 use commands::summaries::{
     get_category_summary, get_daily_summary, get_day_insights, get_day_sessions,
     get_weekly_summary, set_app_category,
@@ -74,6 +83,7 @@ fn set_paused(state: State<AppState>, paused: bool) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -142,7 +152,11 @@ pub fn run() {
             get_active_window,
             check_accessibility,
             request_accessibility,
+            check_screen_recording,
+            request_screen_recording,
             get_recent_sessions,
+            delete_session,
+            delete_app_sessions,
             get_daily_summary,
             get_day_sessions,
             get_weekly_summary,
@@ -177,7 +191,12 @@ pub fn run() {
             delete_todo,
             set_focus,
             get_focus,
-            check_focus
+            check_focus,
+            set_focus_judgment,
+            get_ocr_enabled,
+            set_ocr_enabled,
+            log_focus_time,
+            get_focus_time
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

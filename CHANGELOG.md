@@ -1,5 +1,31 @@
 # focusbar — o que mudou
 
+## v0.3.0 — auditoria geral (46 pendências resolvidas)
+Release grande de qualidade, a partir de uma auditoria multi-agente do app inteiro.
+
+- **Privacidade blindada (porteiro):**
+  - A **checagem de foco** agora pula zonas de exclusão (banco/senha/saúde) — antes,
+    o título dessas janelas podia ir pro modelo. Corrigido.
+  - **URLs limpas:** query e fragment (onde vivem tokens, reset links, `access_token`,
+    `?email=`) são removidos antes de gravar/analisar.
+  - Redação cobre mais: **e-mail, JWT, celular** (além de CPF/cartão/senha/token).
+  - Zonas de exclusão mais espertas: não confunde "**banco de dados**"/"**caixa de
+    entrada**" com banco; pega bancos digitais (Nubank, Inter, C6, PicPay…).
+  - **Local-first de verdade:** o endpoint da IA só sai da máquina com opt-in explícito + https.
+- **Insights que mandam ação** (sem IA, só regra): maior **ladrão de tempo** (nomeado),
+  **intenção declarada vs. realidade**, maior **bloco de foco contínuo**, comparação com
+  a **média da semana**, e **nº de trocas de tarefa**.
+- **Analisar no Claude.ai num clique:** botão em destaque na aba **Hoje**; copia o resumo
+  **e abre o Claude.ai** sozinho (você só dá Cmd+V). Funciona pra **hoje ou ontem**.
+  O resumo agora leva **data, total e top categorias**.
+- **Polish:** estado de **carregando**, aba **Semana** com estado vazio, **erros amigáveis**,
+  card "AGORA" respeita a **pausa**, e a **janela pequena** volta ao tamanho certo.
+- **Robustez:** fronteira de dia à prova de **horário de verão**; leitura de URL do
+  navegador com **timeout** (não trava o rastreador); trava de segurança contra deadlock do DB.
+- **Velocidade:** dashboard recarrega **por evento** (não 40×/min) — ~700 queries/min a menos;
+  **bundle 60% menor** (596KB → 240KB, gráficos sob demanda).
+- **Build:** instalador do Mac agora é **universal** (Intel + Apple Silicon).
+
 ## v0.2.6 — categorias editáveis
 - **Corrige a categorização "burra":** se um app/site estiver na categoria errada
   (ex.: YouTube de estudo marcado como procrastinação), você ajusta num clique em

@@ -1,4 +1,5 @@
 pub mod assistant;
+pub mod config;
 pub mod focus;
 pub mod notes;
 pub mod permissions;

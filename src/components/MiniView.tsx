@@ -1,113 +1,203 @@
-import { useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
-import { LogicalSize } from "@tauri-apps/api/dpi";
-import type { ActiveWindow, DailySummary } from "../types";
-import { fmtDuration } from "../format";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
+import { LogicalSize, LogicalPosition } from "@tauri-apps/api/dpi";
+import type { FocusCheck } from "../types";
+import type { FocusSessionApi } from "../hooks/useFocusSession";
+import { fmtClock } from "../format";
 import { useTodos } from "../hooks/useTodos";
 
-// Widget compacto, flutuante e sempre-no-topo. Arrasta pela área (sem moldura).
+const CARD_W = 268;
+
+// Agente flutuante: um card de vidro, ancorado no canto, que guia.
+//  • Parado  → a lista: escolha por onde começar (▶ foca, ○ conclui).
+//  • Rodando → o timer + o foco, com pausar/parar.
+// Calmo e discreto — uma direção, a ação certa, nada de ruído.
 export function MiniView({
-  win,
-  summary,
   paused,
+  session,
   onExpand,
   onTogglePause,
 }: {
-  win: ActiveWindow | null;
-  summary: DailySummary | null;
   paused: boolean;
+  session: FocusSessionApi;
   onExpand: () => void;
   onTogglePause: () => void;
 }) {
-  const [view, setView] = useState<"now" | "tarefas">("now");
-  const { open, add, toggle } = useTodos(3000);
-  const [text, setText] = useState("");
+  const [focus, setFocus] = useState("");
+  const [check, setCheck] = useState<FocusCheck | null>(null);
+  const { open, toggle } = useTodos(5000);
+  const rootRef = useRef<HTMLDivElement>(null);
 
-  async function switchView(v: "now" | "tarefas") {
-    setView(v);
-    try {
-      await getCurrentWindow().setSize(
-        new LogicalSize(244, v === "tarefas" ? 250 : 116)
-      );
-    } catch {
-      /* ignore */
+  useEffect(() => {
+    let alive = true;
+    async function run() {
+      try {
+        const f = await invoke<string | null>("get_focus");
+        if (!alive) return;
+        setFocus(f ?? "");
+        if (f && f.trim()) {
+          const c = await invoke<FocusCheck>("check_focus");
+          if (alive) setCheck(c);
+        } else {
+          setCheck(null);
+        }
+      } catch {
+        /* ignore */
+      }
     }
+    run();
+    const first = setTimeout(run, 8000);
+    const id = setInterval(run, 30000);
+    return () => {
+      alive = false;
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, []);
+
+  // Ancora no canto superior direito da tela (uma vez).
+  useEffect(() => {
+    (async () => {
+      try {
+        const w = getCurrentWindow();
+        const mon = await currentMonitor();
+        if (!mon) return;
+        const sf = mon.scaleFactor || 1;
+        const mw = mon.size.width / sf;
+        const mx = mon.position.x / sf;
+        const my = mon.position.y / sf;
+        await w.setPosition(
+          new LogicalPosition(Math.round(mx + mw - CARD_W - 18), Math.round(my + 46))
+        );
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, []);
+
+  // Inicia um bloco de 25min num clique (definindo o foco se veio de uma tarefa).
+  async function startBlock(goal: string) {
+    if (goal && goal !== focus) {
+      try {
+        await invoke("set_focus", { text: goal });
+        setFocus(goal);
+      } catch {
+        /* ignore */
+      }
+    }
+    session.start(25, goal || focus);
   }
 
-  const app = win?.app_name?.trim();
-  const showApp = paused ? "pausado" : app && app !== "focusbar" ? app : app || "—";
+  const onTask = check?.on_task;
+  const running = session.phase !== "idle";
+  const isBreak = session.phase === "break";
+
+  // Tom (cor do ponto de status) + a direção (uma frase calma, sem culpa).
+  let tone = "idle";
+  let dir = "Tô aqui com você";
+  if (paused) {
+    tone = "paused";
+    dir = "Monitoramento pausado";
+  } else if (isBreak) {
+    tone = "break";
+    dir = "Pausa — respira um pouco";
+  } else if (running && session.blockPaused) {
+    tone = "paused";
+    dir = "Bloco pausado";
+  } else if (running) {
+    tone = onTask === false ? "warn" : "good";
+    dir = onTask === false ? "Vamos voltar ao foco?" : "Em foco";
+  } else if (session.pomodoros > 0) {
+    tone = "good";
+    dir = "Boa! Pronto pra mais um?";
+  } else {
+    tone = "idle";
+    dir = open.length ? "Escolha por onde começar" : "Vamos começar pequeno";
+  }
+
+  // Ajusta a janela à altura do conteúdo — nada de vão vazio.
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const h = Math.ceil(el.offsetHeight);
+    getCurrentWindow()
+      .setSize(new LogicalSize(CARD_W, h))
+      .catch(() => {});
+  }, [running, isBreak, paused, dir, open.length, session.blockPaused]);
 
   return (
-    <div className={paused ? "mini paused" : "mini"} data-tauri-drag-region>
-      <div className="mini-top">
-        <div className="mini-tabs">
-          <button
-            className={view === "now" ? "mini-tab active" : "mini-tab"}
-            onClick={() => switchView("now")}
-          >
-            Agora
-          </button>
-          <button
-            className={view === "tarefas" ? "mini-tab active" : "mini-tab"}
-            onClick={() => switchView("tarefas")}
-          >
-            Tarefas{open.length ? ` · ${open.length}` : ""}
-          </button>
+    <div ref={rootRef} className="agent-wrap">
+      <div className={`agent ${tone}`} data-tauri-drag-region>
+        <div className="agent-top" data-tauri-drag-region>
+          <span className="agent-brand" data-tauri-drag-region>
+            <i className="agent-status" />
+            focusbar
+          </span>
+          <div className="agent-ctrl">
+            <button
+              className="agent-icon"
+              onClick={onTogglePause}
+              title={paused ? "retomar monitoramento" : "pausar monitoramento"}
+            >
+              {paused ? "▶" : "⏸"}
+            </button>
+            <button className="agent-icon" onClick={onExpand} title="abrir janela">
+              ⤢
+            </button>
+          </div>
         </div>
-        <div className="mini-actions">
-          <button
-            className="mini-icon"
-            onClick={onTogglePause}
-            title={paused ? "retomar" : "pausar"}
-          >
-            {paused ? "▶" : "⏸"}
-          </button>
-          <button className="mini-icon" onClick={onExpand} title="expandir">
-            ⤢
-          </button>
-        </div>
-      </div>
 
-      {view === "now" ? (
-        <>
-          <div className="mini-app" title={win?.title || ""}>
-            {showApp}
-          </div>
-          <div className="mini-foot">
-            <span className="mini-focus-label">foco hoje</span>
-            <span className="mini-focus-val">
-              {summary ? fmtDuration(summary.total_secs) : "—"}
-            </span>
-          </div>
-        </>
-      ) : (
-        <div className="mini-todos">
-          <input
-            className="mini-todo-input"
-            placeholder="+ nova tarefa (Enter)"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                add(text);
-                setText("");
-              }
-            }}
-          />
-          <ul className="mini-todo-list">
-            {open.length === 0 ? (
-              <li className="mini-todo-empty">tudo feito ✓</li>
-            ) : (
-              open.slice(0, 6).map((t) => (
-                <li key={t.id} className="mini-todo-row">
-                  <button className="todo-check" onClick={() => toggle(t.id)} />
-                  <span>{t.text}</span>
-                </li>
-              ))
-            )}
-          </ul>
+        <div className="agent-dir" data-tauri-drag-region>
+          {dir}
         </div>
-      )}
+
+        {running ? (
+          <div className="agent-timer">
+            <div className="agent-clock">{fmtClock(session.remaining)}</div>
+            {!isBreak && focus && (
+              <div className="agent-focus" title={focus}>
+                {focus}
+              </div>
+            )}
+            <div className="agent-timer-ctrl">
+              <button className="agent-link" onClick={session.toggleBlock}>
+                {session.blockPaused ? "retomar" : "pausar"}
+              </button>
+              <span className="agent-sep">·</span>
+              <button className="agent-link" onClick={session.stop}>
+                {isBreak ? "pular" : "parar"}
+              </button>
+            </div>
+          </div>
+        ) : open.length === 0 ? (
+          <button className="agent-primary" onClick={() => startBlock(focus)}>
+            {focus ? `Focar em "${focus}"` : "Começar um bloco de 25 min"}
+          </button>
+        ) : (
+          <div className="agent-list">
+            {open.slice(0, 4).map((t) => (
+              <div className="agent-item" key={t.id}>
+                <button
+                  className="agent-item-check"
+                  onClick={() => toggle(t.id)}
+                  title="concluir"
+                />
+                <span className="agent-item-text" title={t.text}>
+                  {t.text}
+                </span>
+                <button
+                  className="agent-item-go"
+                  onClick={() => startBlock(t.text)}
+                  title="focar nesta tarefa (25 min)"
+                >
+                  ▶
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

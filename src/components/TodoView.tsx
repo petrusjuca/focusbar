@@ -6,10 +6,12 @@ function Row({
   t,
   onToggle,
   onRemove,
+  onFocus,
 }: {
   t: Todo;
   onToggle: () => void;
   onRemove: () => void;
+  onFocus?: () => void;
 }) {
   return (
     <li className={t.done ? "todo-row done" : "todo-row"}>
@@ -17,6 +19,11 @@ function Row({
         {t.done ? "✓" : ""}
       </button>
       <span className="todo-text">{t.text}</span>
+      {!t.done && onFocus && (
+        <button className="todo-focus" onClick={onFocus} title="focar nesta tarefa">
+          ▶ focar
+        </button>
+      )}
       <button className="rm-btn danger" onClick={onRemove}>
         x
       </button>
@@ -24,7 +31,11 @@ function Row({
   );
 }
 
-export function TodoView() {
+export function TodoView({
+  onFocusTask,
+}: {
+  onFocusTask?: (text: string) => void;
+}) {
   const { open, done, add, toggle, remove } = useTodos();
   const [text, setText] = useState("");
 
@@ -63,7 +74,13 @@ export function TodoView() {
       ) : (
         <ul className="todo-list">
           {open.map((t) => (
-            <Row key={t.id} t={t} onToggle={() => toggle(t.id)} onRemove={() => remove(t.id)} />
+            <Row
+              key={t.id}
+              t={t}
+              onToggle={() => toggle(t.id)}
+              onRemove={() => remove(t.id)}
+              onFocus={onFocusTask ? () => onFocusTask(t.text) : undefined}
+            />
           ))}
           {done.length > 0 && <div className="todo-done-label">concluídas</div>}
           {done.map((t) => (

@@ -9,6 +9,7 @@ export interface ActiveWindow {
 }
 
 export interface FocusSession {
+  id: number;
   app_name: string;
   title: string;
   start_ts: number;
@@ -63,6 +64,11 @@ export interface Insight {
   text: string;
 }
 
+export interface GoalTime {
+  goal: string;
+  secs: number;
+}
+
 export interface Note {
   id: number;
   day: string;
@@ -84,6 +90,7 @@ export interface FocusCheck {
   app: string | null;
   on_task: boolean | null;
   reason: string;
+  source: string; // "user" | "rule" | "ia" | "none"
 }
 
 export interface Reminder {

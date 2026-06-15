@@ -73,7 +73,10 @@ h1 {
   background: #ffffff;
   -webkit-user-select: none;
   user-select: none;
-  cursor: default;
+  cursor: grab;
+}
+.mini:active {
+  cursor: grabbing;
 }
 
 .mini.paused {
@@ -86,15 +89,78 @@ h1 {
   align-items: center;
 }
 
+/* Layout do "Foco" no mini widget (assistente de relance) */
 .mini-now {
-  font-size: 0.58rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  color: #b0b0b6;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  margin-top: 0.35rem;
+  gap: 0.16rem;
 }
-
-.mini.paused .mini-now {
-  color: #ff9500;
+.mini-goal {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #1a1a1c;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mini-status {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+.mini-dot {
+  font-size: 0.88rem;
+  line-height: 1;
+}
+.mini-headline {
+  font-size: 1.05rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #8a8a90;
+}
+.mini-status.good .mini-headline {
+  color: #1c8a3a;
+}
+.mini-status.warn .mini-headline {
+  color: #d9772f;
+}
+.mini-tip {
+  font-size: 0.78rem;
+  color: #6a6a70;
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.mini-app-now {
+  font-size: 0.72rem;
+  color: #9a9aa0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+}
+/* Acento por tom (barrinha à esquerda + leve fundo) */
+.mini {
+  border-left: 3px solid transparent;
+}
+.mini.good {
+  border-left-color: #34c759;
+  background: #f6fcf8;
+}
+.mini.warn {
+  border-left-color: #ff9f0a;
+  background: #fff9f0;
+}
+.mini.paused {
+  border-left-color: #ff9500;
+}
+.mini.neutral {
+  border-left-color: #d4d4da;
 }
 
 .mini-tabs {
@@ -378,6 +444,22 @@ h1 {
   margin-top: 0.4rem;
   font-size: 0.82rem;
   color: #6b6b70;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.focusbar-correct {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+.focusbar-src {
+  font-size: 0.7rem;
+  color: #b0b0b6;
 }
 
 .tabs {
@@ -832,6 +914,24 @@ h1 {
   .mini.paused {
     background: #2e2616;
   }
+  .mini.good {
+    background: #16241a;
+  }
+  .mini.warn {
+    background: #2a2014;
+  }
+  .mini-goal {
+    color: #f0f0f2;
+  }
+  .mini-tip {
+    color: #b0b0b6;
+  }
+  .mini-status.good .mini-headline {
+    color: #4cd964;
+  }
+  .mini-status.warn .mini-headline {
+    color: #ffa53a;
+  }
   .mini-icon:hover {
     background: rgba(255, 255, 255, 0.08);
     color: #ddd;
@@ -1128,4 +1228,964 @@ h1 {
   .title {
     color: #c8c8cc;
   }
+}
+
+/* ===== Analisar no Claude.ai (CTA grátis) ===== */
+.claude-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.9rem 0;
+}
+.claude-btn {
+  width: 100%;
+  background: linear-gradient(135deg, #d97757 0%, #c2603f 100%);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 0.7rem 1.1rem;
+  font-size: 0.98rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: filter 0.15s ease;
+}
+.claude-btn:hover {
+  filter: brightness(1.07);
+}
+.claude-hint {
+  font-size: 0.74rem;
+  color: #8a8a90;
+}
+
+/* ===== Toggle de dia (Hoje / Ontem) ===== */
+.day-toggle {
+  display: flex;
+  gap: 0.4rem;
+  margin: 0.6rem 0;
+}
+.day-pill {
+  background: transparent;
+  border: 1px solid #d0d0d6;
+  border-radius: 999px;
+  padding: 0.28rem 0.9rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  color: inherit;
+}
+.day-pill.active {
+  background: #007aff;
+  border-color: #007aff;
+  color: #fff;
+  font-weight: 600;
+}
+
+/* ===== Estado de carregando + faixa de pausa ===== */
+.loading-state {
+  text-align: center;
+  color: #8a8a90;
+  padding: 2rem 1rem;
+  font-size: 0.95rem;
+}
+.now-card.is-paused {
+  opacity: 0.6;
+}
+.paused-badge {
+  display: inline-block;
+  margin-top: 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #b26b00;
+}
+
+/* Apagar sessão do histórico (controle do usuário) */
+.session-del {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  opacity: 0.35;
+  padding: 0 0.15rem;
+  transition: opacity 0.15s ease;
+}
+.session-del:hover {
+  opacity: 1;
+}
+.session-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: #9a9aa0;
+}
+.link-btn.danger {
+  color: #ff3b30;
+  font-weight: 700;
+}
+
+@media (prefers-color-scheme: dark) {
+  .day-pill {
+    border-color: #4a4a50;
+  }
+  .claude-hint,
+  .loading-state {
+    color: #9a9aa0;
+  }
+}
+
+/* ============================================================
+   TEMA: GRAFITE & JADE  —  dark sempre-ativo, foco e profundidade.
+   Este bloco vem por último: vence o tema claro E o @media dark.
+   ============================================================ */
+:root {
+  /* Padrão = ESCURO (Grafite & Jade) */
+  --bg: #17181b;
+  --surface: #212329;
+  --surface-2: #2a2c33;
+  --border: #34363d;
+  --text: #e9eaed;
+  --text-dim: #a2a4ac;
+  --text-faint: #71747c;
+  --accent: #10b981; /* jade */
+  --accent-hover: #0e9f70;
+  --good: #10b981;
+  --warn: #f59e0b;
+  --danger: #f87171;
+
+  color: var(--text);
+  background: var(--bg);
+  color-scheme: dark;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI",
+    system-ui, sans-serif;
+}
+
+/* Tema CLARO: papel quente, MESMO acento jade (nada de azul de IA) */
+html[data-theme="light"] {
+  --bg: #fbfbfd;
+  --surface: #ffffff;
+  --surface-2: #ececef;
+  --border: #e3e3e8;
+  --text: #1a1a1c;
+  --text-dim: #6b6b70;
+  --text-faint: #9b9ba0;
+  --accent: #0d9d6e;
+  --accent-hover: #0b8a60;
+  --good: #15803d;
+  --warn: #c2410c;
+  --danger: #dc2626;
+  color-scheme: light;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+}
+
+h1 {
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.subtitle,
+.meta,
+.now-label,
+.bg-note,
+.empty,
+.cat-dur,
+.week-app-dur,
+.session-title,
+.session-meta,
+.focusbar-status,
+.focusbar-src,
+.daily-header,
+.sessions-header,
+.todo-done-label,
+.stat-label,
+.cat-edit-dur,
+.rm-inline,
+.mini-focus-label,
+.mini-app-now,
+.mini-tip,
+.claude-hint,
+.loading-state {
+  color: var(--text-dim);
+}
+
+.title,
+.todo-text,
+.cat-name,
+.week-app-name,
+.mini-goal {
+  color: var(--text);
+}
+
+/* Superfícies (cards e afins) — grafite com borda sutil, sem sombra dura */
+.card,
+.ai-review,
+.insight-row,
+.rules-box,
+.reminder-form,
+.stat-card,
+.chart-wrap,
+.session-row,
+.todo-row,
+.focusbar,
+.focusbar.set {
+  background: var(--surface);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.card,
+.session-row,
+.todo-row,
+.insight-row,
+.stat-card,
+.chart-wrap {
+  border: 1px solid var(--border);
+}
+
+/* Abas */
+.tabs {
+  background: var(--surface);
+}
+.tab {
+  color: var(--text-dim);
+}
+.tab.active {
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: none;
+}
+
+/* Acento jade no lugar do azul de IA */
+.link-btn,
+.ai-h,
+.mini-tab.active,
+.mini-focus-val,
+.session-dur {
+  color: var(--accent);
+}
+.insight-row.focus {
+  border-left-color: var(--accent);
+}
+.focusbar.set.ontask,
+.mini.good {
+  border-left-color: var(--good);
+}
+.focusbar.set.offtask,
+.mini.warn {
+  border-left-color: var(--warn);
+}
+/* Sem tom creme/tinta: o fundo fica limpo; só a barrinha lateral + a cor do
+   texto sinalizam foco/distração. (Era o que deixava com cara de IA.) */
+.mini.good,
+.mini.warn {
+  background: var(--bg);
+}
+.mini-status.good .mini-headline {
+  color: var(--accent);
+}
+.mini-status.warn .mini-headline {
+  color: var(--warn);
+}
+.mini,
+.mini.paused {
+  background: var(--bg);
+}
+
+/* Botões primários → jade */
+.grant-btn,
+.day-pill.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #06231a;
+  font-weight: 700;
+}
+.grant-btn:hover {
+  background: var(--accent-hover);
+}
+
+/* Botões secundários / inputs → superfície elevada */
+.pause-btn,
+.mini-toggle,
+.rm-btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+.pause-btn.paused {
+  background: var(--warn);
+  color: #2a1c00;
+  border-color: var(--warn);
+}
+.focusbar-input,
+.mini-todo-input,
+.rm-text,
+.rm-row select,
+.rm-row input[type="time"],
+.rm-inline input,
+.set-task input,
+.rule-kw,
+.rule-name,
+.cat-edit-row select {
+  background: var(--surface-2);
+  color: var(--text);
+  border-color: var(--border);
+}
+.focusbar-input {
+  background: transparent;
+}
+
+/* Barras / trilhos */
+.cat-bar,
+.ribbon {
+  background: var(--surface-2);
+}
+.sessions-count {
+  background: var(--surface-2);
+  color: var(--text-dim);
+}
+
+/* Chip de task → jade suave */
+.task-chip {
+  background: rgba(16, 185, 129, 0.14);
+  color: #5fe3b6;
+}
+
+/* Card de destaque → jade */
+.stat-card.highlight {
+  background: linear-gradient(135deg, #0f9d6e, #10b981);
+  color: #06231a;
+}
+
+/* CTA do Claude.ai → fundo jade-grafite (o botão coral fica) */
+.ai-card {
+  background: linear-gradient(135deg, #1d2b27, #1a2630);
+  border: 1px solid var(--border);
+}
+.ai-card-text {
+  color: var(--text-dim);
+}
+
+/* Banner de permissão → âmbar em fundo escuro */
+.permission-banner {
+  background: #2a2414;
+  border-color: #5a4a1e;
+}
+.perm-title {
+  color: #f0c860;
+}
+.perm-text {
+  color: #d8c89a;
+}
+.perm-hint {
+  color: #b0a070;
+}
+
+/* Tag de ocioso, erros, divisores */
+.idle-tag {
+  color: #f0c860;
+  background: #3a3320;
+}
+.error,
+.link-btn.danger {
+  color: var(--danger);
+}
+.footer {
+  border-top-color: var(--border);
+}
+.rule-item,
+.cat-edit-row {
+  border-top-color: var(--border);
+}
+.mini-icon {
+  color: var(--text-dim);
+}
+.mini-icon:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+/* Ajustes que precisam de valor próprio no tema CLARO (eram fixos em escuro) */
+html[data-theme="light"] .permission-banner {
+  background: #fff7e6;
+  border-color: #f0d28a;
+}
+html[data-theme="light"] .perm-title {
+  color: #8a5a00;
+}
+html[data-theme="light"] .perm-text {
+  color: #6b5520;
+}
+html[data-theme="light"] .perm-hint {
+  color: #9a7b30;
+}
+html[data-theme="light"] .idle-tag {
+  color: #b07b00;
+  background: #fff3d6;
+}
+html[data-theme="light"] .ai-card {
+  background: linear-gradient(135deg, #eafaf3, #eef4fb);
+}
+html[data-theme="light"] .mini-icon:hover {
+  background: rgba(0, 0, 0, 0.07);
+}
+
+/* ===== Modo Foco (Pomodoro) ===== */
+.session-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem 1.1rem;
+  margin-top: 1rem;
+  text-align: left;
+}
+.session-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.session-card-title {
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+.pomos {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+.session-card-sub {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin: 0.4rem 0 0.85rem;
+}
+.session-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+}
+.session-card.running {
+  text-align: center;
+  border-left: 3px solid var(--accent);
+}
+.session-card.running.brk {
+  border-left-color: var(--warn);
+}
+.session-goal {
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  margin-top: 0.35rem;
+}
+.session-clock {
+  font-size: 3rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  margin: 0.15rem 0 0.45rem;
+  color: var(--accent);
+}
+.session-card.running.brk .session-clock {
+  color: var(--warn);
+}
+
+/* Cronômetro no mini widget */
+.mini-session {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+.mini-session-clock {
+  font-size: 1.35rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  color: var(--accent);
+}
+.mini-session.brk .mini-session-clock {
+  color: var(--warn);
+}
+.mini-session-label {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+
+/* Botão "▶ focar" na tarefa */
+.todo-focus {
+  background: transparent;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  border-radius: 8px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.76rem;
+  font-weight: 700;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.todo-focus:hover {
+  background: var(--accent);
+  color: #06231a;
+}
+
+/* Painel "Dedicado hoje" (tempo de foco por tarefa) */
+.dedication {
+  margin-top: 1.5rem;
+  text-align: left;
+}
+.dedication-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.dedication-row {
+  margin-bottom: 0.7rem;
+}
+.dedication-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  margin-bottom: 0.28rem;
+}
+.dedication-goal {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dedication-time {
+  font-weight: 700;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.dedication-bar {
+  height: 8px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.dedication-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 6px;
+}
+
+/* Toggle "ver meu dia em detalhe" — recolhe os gráficos/listas (anti-sobrecarga) */
+.details-toggle {
+  width: 100%;
+  background: transparent;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+  padding: 0.65rem;
+  margin-top: 1.5rem;
+  color: var(--text-dim);
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+.details-toggle:hover {
+  color: var(--text);
+  border-color: var(--text-faint);
+}
+
+/* ===== Agente flutuante (widget) — discreto, calmo, direciona ===== */
+/* Janela cheia: fundo opaco preenchendo a janela inteira (a transparência
+   global do Tauri só deve "vazar" no modo mini). */
+html,
+body,
+#root {
+  min-height: 100vh;
+}
+html {
+  background: var(--bg);
+}
+
+/* Modo mini: janela transparente → só o card flutuante aparece */
+html[data-mini="1"],
+html[data-mini="1"] body,
+html[data-mini="1"] #root {
+  background: transparent !important;
+  min-height: 0 !important;
+}
+/* Moldura transparente ao redor do card (espaço pra sombra não ser cortada) */
+.agent-wrap {
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+.agent {
+  height: auto;
+  box-sizing: border-box;
+  padding: 0.8rem 0.9rem 0.9rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+  /* Vidro fosco: a transparência da janela deixa o desktop borrado atrás. */
+  background: rgba(24, 26, 31, 0.62);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(28px) saturate(180%);
+  border: 0.5px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  box-shadow:
+    0 14px 36px rgba(0, 0, 0, 0.38),
+    0 2px 8px rgba(0, 0, 0, 0.2);
+  color: var(--text);
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: grab;
+}
+.agent:active {
+  cursor: grabbing;
+}
+html[data-theme="light"] .agent {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow:
+    0 14px 34px rgba(0, 0, 0, 0.16),
+    0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Ponto de status (no lugar de emojis) — a cor diz o estado, com calma. */
+.agent-status {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  flex-shrink: 0;
+}
+.agent.good .agent-status {
+  background: var(--good);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.18);
+}
+.agent.warn .agent-status {
+  background: var(--warn);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+}
+.agent.break .agent-status {
+  background: var(--accent);
+}
+
+.agent-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.agent-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.agent-ctrl {
+  display: flex;
+  gap: 0.1rem;
+}
+.agent-icon {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-size: 0.72rem;
+  color: var(--text-faint);
+  padding: 0.1rem 0.28rem;
+  border-radius: 5px;
+  line-height: 1;
+}
+.agent-icon:hover {
+  color: var(--text);
+  background: rgba(127, 127, 127, 0.14);
+}
+
+/* A direção — uma frase calma. A cor é neutra; o status fica no ponto. */
+.agent-dir {
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  line-height: 1.3;
+  color: var(--text);
+}
+.agent.warn .agent-dir {
+  color: var(--warn);
+}
+.agent.idle .agent-dir,
+.agent.paused .agent-dir {
+  color: var(--text-dim);
+}
+
+/* CTA principal: abrir o agente de foco (topo da janela cheia) */
+.agent-cta {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  width: 100%;
+  background: var(--accent);
+  border: none;
+  color: #06231a;
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  font-size: 1.02rem;
+  font-weight: 800;
+  cursor: pointer;
+  margin-bottom: 0.7rem;
+}
+.agent-cta:hover {
+  background: var(--accent-hover);
+}
+.agent-cta-sub {
+  font-size: 0.76rem;
+  font-weight: 600;
+  opacity: 0.78;
+}
+
+/* Auto-diagnóstico: linha verde discreta quando tudo ok; pílulas de aviso clicáveis quando não */
+.selfcheck-ok {
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  text-align: center;
+  margin: -0.2rem 0 0.7rem;
+}
+.selfcheck {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  justify-content: center;
+  margin: -0.2rem 0 0.7rem;
+}
+.selfcheck-item {
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.45);
+  color: var(--text);
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.76rem;
+  cursor: pointer;
+}
+.selfcheck-item:hover {
+  background: rgba(245, 158, 11, 0.22);
+}
+
+/* Botão primário (quando não há tarefas): começar um bloco */
+.agent-primary {
+  width: 100%;
+  margin-top: 0.1rem;
+  padding: 0.6rem 0.8rem;
+  border: none;
+  border-radius: 11px;
+  background: var(--accent);
+  color: #06231a;
+  font-size: 0.85rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-primary:hover {
+  background: var(--accent-hover);
+}
+
+/* Mini RODANDO: o timer como estrela */
+.agent-timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.35rem 0 0.1rem;
+}
+.agent-clock {
+  font-size: 2.7rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.005em;
+  line-height: 1;
+}
+.agent-focus {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-timer-ctrl {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.1rem;
+}
+.agent-link {
+  background: transparent;
+  border: none;
+  color: var(--text-dim);
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 0.1rem 0.2rem;
+  border-radius: 6px;
+}
+.agent-link:hover {
+  color: var(--text);
+  background: rgba(127, 127, 127, 0.14);
+}
+.agent-sep {
+  color: var(--text-faint);
+  font-size: 0.78rem;
+}
+
+/* Mini PARADO: a lista (escolha por onde começar) */
+.agent-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-top: 0.05rem;
+  overflow: hidden;
+}
+.agent-item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.22rem 0.1rem;
+  border-radius: 8px;
+}
+.agent-item:hover {
+  background: rgba(127, 127, 127, 0.1);
+}
+.agent-item-check {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-faint);
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.12s;
+}
+.agent-item-check:hover {
+  border-color: var(--accent);
+  background: rgba(16, 185, 129, 0.18);
+}
+.agent-item-text {
+  flex: 1;
+  font-size: 0.85rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.agent-item-go {
+  flex-shrink: 0;
+  width: 28px;
+  height: 26px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--accent);
+  font-size: 0.68rem;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity 0.12s;
+}
+.agent-item:hover .agent-item-go {
+  opacity: 1;
+}
+.agent-item-go:hover {
+  background: var(--accent);
+  color: #06231a;
+}
+
+/* Faixa de timer global na janela cheia (qualquer aba, enquanto roda um bloco) */
+.run-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 12px;
+  margin-bottom: 0.7rem;
+  border: 1px solid var(--border);
+}
+.run-strip.foc {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.run-strip.brk {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.4);
+}
+.run-clock {
+  font-size: 1.15rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.run-goal {
+  flex: 1;
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.run-strip.frozen {
+  opacity: 0.7;
+}
+
+/* Header compacto (#4) */
+.brand-compact {
+  font-size: 1.5rem;
+  margin: 0 0 0.6rem;
+  text-align: center;
+}
+
+/* Card AGORA em uma linha só (#4) */
+.now-line {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  overflow: hidden;
+}
+.now-tag {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  background: rgba(16, 185, 129, 0.12);
+  padding: 0.12rem 0.4rem;
+  border-radius: 6px;
+}
+.now-app {
+  flex-shrink: 0;
+  font-weight: 700;
+}
+.now-title {
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Duração personalizada do bloco (#8) */
+.session-custom {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+.session-custom-input {
+  width: 64px;
+  padding: 0.35rem 0.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+/* Mini: linha de controles do timer (pausar/parar lado a lado) (#7) */
+.agent-timer-ctrl {
+  display: flex;
+  gap: 0.9rem;
 }

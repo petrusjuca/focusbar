@@ -15,7 +15,7 @@ export function FocusBar() {
   const [draft, setDraft] = useState("");
   const [check, setCheck] = useState<FocusCheck | null>(null);
   const [loading, setLoading] = useState(false);
-  const offStreak = useRef(0);
+  const lastNudge = useRef(0);
 
   useEffect(() => {
     invoke<string | null>("get_focus")
@@ -29,7 +29,7 @@ export function FocusBar() {
     setFocus(text);
     setEditing(false);
     setCheck(null);
-    offStreak.current = 0;
+    lastNudge.current = 0;
   }
 
   async function clear() {
@@ -45,8 +45,10 @@ export function FocusBar() {
       const c = await invoke<FocusCheck>("check_focus");
       setCheck(c);
       if (c.on_task === false) {
-        offStreak.current += 1;
-        if (offStreak.current >= 2) {
+        // Nudge gentil: no máximo 1 a cada 15min enquanto distraído.
+        const now = Date.now();
+        if (now - lastNudge.current > 15 * 60 * 1000) {
+          lastNudge.current = now;
           try {
             let ok = await isPermissionGranted();
             if (!ok) ok = (await requestPermission()) === "granted";
@@ -58,10 +60,9 @@ export function FocusBar() {
           } catch {
             /* ignore */
           }
-          offStreak.current = 0;
         }
       } else if (c.on_task === true) {
-        offStreak.current = 0;
+        lastNudge.current = 0;
       }
     } catch {
       /* ignore */
@@ -69,11 +70,26 @@ export function FocusBar() {
     if (!auto) setLoading(false);
   }
 
-  // Auto-checagem a cada 3 min quando há foco definido.
+  async function correct(onTask: boolean) {
+    if (!check?.app) return;
+    try {
+      await invoke("set_focus_judgment", { app: check.app, onTask });
+      runCheck(false);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // Auto-checagem: primeira em ~15s (pra dar tempo de trocar pra janela de
+  // trabalho) e depois a cada 3 min, enquanto houver foco definido.
   useEffect(() => {
     if (!focus.trim()) return;
+    const first = setTimeout(() => runCheck(true), 15000);
     const id = setInterval(() => runCheck(true), 180000);
-    return () => clearInterval(id);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focus]);
 
@@ -89,7 +105,7 @@ export function FocusBar() {
           autoFocus={editing}
         />
         <button className="grant-btn" onClick={save}>
-          focar
+          definir foco
         </button>
       </div>
     );
@@ -126,10 +142,29 @@ export function FocusBar() {
       </div>
       {check && (
         <div className="focusbar-status">
-          {status === "ontask" && "🟢 no foco"}
-          {status === "offtask" && "🟠 "}
-          {status === "neutral" && "⚪ "}
-          {status !== "ontask" && <span>{check.reason}</span>}
+          <span>
+            {status === "ontask"
+              ? "🟢 no foco"
+              : status === "offtask"
+                ? `🟠 ${check.reason}`
+                : `⚪ ${check.reason}`}
+          </span>
+          {check.app && check.on_task !== null && (
+            <span className="focusbar-correct">
+              {check.on_task ? (
+                <button className="link-btn" onClick={() => correct(false)}>
+                  é distração
+                </button>
+              ) : (
+                <button className="link-btn" onClick={() => correct(true)}>
+                  é útil ✓
+                </button>
+              )}
+              {check.source === "user" && <span className="focusbar-src">· você ajustou</span>}
+              {check.source === "rule" && <span className="focusbar-src">· regra</span>}
+              {check.source === "ia" && <span className="focusbar-src">· IA</span>}
+            </span>
+          )}
         </div>
       )}
     </div>

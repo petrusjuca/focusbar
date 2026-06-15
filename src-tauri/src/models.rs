@@ -13,6 +13,7 @@ pub struct ActiveWindow {
 /// Uma sessão de foco já gravada (para listar no frontend).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FocusSession {
+    pub id: i64,
     pub app_name: String,
     pub title: String,
     pub start_ts: i64,
@@ -81,6 +82,13 @@ pub struct TaskTotal {
 pub struct Insight {
     pub kind: String,
     pub text: String,
+}
+
+/// Tempo de foco dedicado a um objetivo/tarefa (somatório dos blocos do dia).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GoalTime {
+    pub goal: String,
+    pub secs: i64,
 }
 
 /// Nota/intenção do dia. kind: "intention" | "note".

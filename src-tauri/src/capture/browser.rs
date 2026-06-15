@@ -34,6 +34,9 @@ pub fn browser_url(app_name: &str) -> Option<String> {
     } else {
         return None;
     };
+    // NOTA: nada de `with timeout` curto aqui — ele cancelava o prompt de permissão
+    // de Automação antes do usuário clicar "Permitir". A proteção contra travamento
+    // (raro) fica pra uma leitura de URL fora do thread do sampler, no futuro.
 
     let out = Command::new("osascript").arg("-e").arg(&script).output().ok()?;
     if !out.status.success() {
@@ -50,6 +53,19 @@ pub fn browser_url(app_name: &str) -> Option<String> {
 #[cfg(not(target_os = "macos"))]
 pub fn browser_url(_app_name: &str) -> Option<String> {
     None
+}
+
+/// URL "limpa" pro título: descarta query (`?`) e fragment (`#`), que costumam
+/// carregar tokens/PII (reset token, access_token de OAuth, `?email=`, session id).
+/// Preserva scheme + host + path (contexto útil tipo `/watch`, `/r/rust`).
+pub fn clean_url(url: &str) -> String {
+    let no_frag = url.split('#').next().unwrap_or(url);
+    no_frag
+        .split('?')
+        .next()
+        .unwrap_or(no_frag)
+        .trim_end_matches('/')
+        .to_string()
 }
 
 /// Nome "bonito" do site a partir da URL (ex.: web.whatsapp.com → "WhatsApp",
@@ -111,4 +127,42 @@ pub fn site_name(url: &str) -> Option<String> {
         }
     };
     Some(nice.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn maps_known_sites() {
+        assert_eq!(site_name("https://web.whatsapp.com/").as_deref(), Some("WhatsApp"));
+        assert_eq!(
+            site_name("https://www.youtube.com/watch?v=abc").as_deref(),
+            Some("YouTube")
+        );
+        assert_eq!(site_name("https://github.com/owner/repo").as_deref(), Some("GitHub"));
+        assert_eq!(site_name("https://x.com/home").as_deref(), Some("X (Twitter)"));
+    }
+
+    #[test]
+    fn strips_www_path_and_query() {
+        assert_eq!(
+            site_name("https://www.reddit.com/r/rust?sort=new").as_deref(),
+            Some("Reddit")
+        );
+    }
+
+    #[test]
+    fn unknown_host_is_title_cased() {
+        assert_eq!(
+            site_name("https://stackoverflow.com/questions/1").as_deref(),
+            Some("Stackoverflow")
+        );
+    }
+
+    #[test]
+    fn empty_url_returns_none() {
+        assert_eq!(site_name(""), None);
+        assert_eq!(site_name("https://"), None);
+    }
 }

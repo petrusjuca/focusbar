@@ -1,10 +1,20 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { CopyToClaudeButton } from "./CopyToClaudeButton";
+import { OcrSettings } from "./OcrSettings";
+import { friendlyError } from "../format";
 
 interface AiStatus {
   running: boolean;
   model: boolean;
+}
+
+/** Data de ontem no formato YYYY-MM-DD (fuso local). */
+function yesterday(): string {
+  const d = new Date(Date.now() - 86_400_000);
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 function renderMd(text: string) {
@@ -25,7 +35,7 @@ export function AssistantView() {
   const [pulling, setPulling] = useState(false);
   const [loading, setLoading] = useState(false);
   const [review, setReview] = useState<string>("");
-  const [copied, setCopied] = useState(false);
+  const [day, setDay] = useState<string | null>(null); // null = hoje
   const [err, setErr] = useState<string | null>(null);
 
   async function refreshStatus() {
@@ -71,7 +81,7 @@ export function AssistantView() {
       await invoke("ai_pull_model");
       await refreshStatus();
     } catch (e) {
-      setErr(String(e));
+      setErr(friendlyError(e));
     }
     setPulling(false);
   }
@@ -80,23 +90,11 @@ export function AssistantView() {
     setLoading(true);
     setErr(null);
     try {
-      setReview(await invoke<string>("ai_day_review", { day: null }));
+      setReview(await invoke<string>("ai_day_review", { day }));
     } catch (e) {
-      setErr(String(e));
+      setErr(friendlyError(e));
     }
     setLoading(false);
-  }
-
-  async function copyForClaude() {
-    setErr(null);
-    try {
-      const digest = await invoke<string>("ai_day_digest", { day: null });
-      await navigator.clipboard.writeText(digest);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch (e) {
-      setErr(String(e));
-    }
   }
 
   return (
@@ -105,16 +103,28 @@ export function AssistantView() {
         <span>ASSISTENTE</span>
       </div>
 
-      {/* Opção A: IA forte (Claude/etc.) — sempre disponível, sem instalar nada */}
+      {/* Opção A: IA forte (Claude.ai) — sempre disponível, grátis, sem instalar nada */}
       <div className="ai-card">
-        <div className="ai-card-title">Analisar com uma IA forte (ex.: Claude)</div>
+        <div className="ai-card-title">Analisar com o Claude.ai (recomendado)</div>
         <p className="ai-card-text">
-          Copia o resumo do seu dia (já limpo: sem senha/CPF/banco) pra você colar
-          no Claude.ai e ter uma análise inteligente. Grátis no seu plano.
+          Monta o resumo do seu dia (já limpo: sem senha/CPF/banco), copia e abre o
+          Claude.ai num clique — você só cola (Cmd+V). Grátis no seu plano.
         </p>
-        <button className="grant-btn" onClick={copyForClaude}>
-          {copied ? "copiado! cole no Claude ✓" : "Copiar resumo do dia"}
-        </button>
+        <div className="day-toggle">
+          <button
+            className={day === null ? "day-pill active" : "day-pill"}
+            onClick={() => setDay(null)}
+          >
+            Hoje
+          </button>
+          <button
+            className={day !== null ? "day-pill active" : "day-pill"}
+            onClick={() => setDay(yesterday())}
+          >
+            Ontem
+          </button>
+        </div>
+        <CopyToClaudeButton day={day} />
       </div>
 
       <div className="daily-header" style={{ marginTop: "1.5rem" }}>
@@ -166,6 +176,11 @@ export function AssistantView() {
 
       {err && <p className="error">{err}</p>}
       {review && <div className="ai-review">{renderMd(review)}</div>}
+
+      <div className="daily-header" style={{ marginTop: "1.5rem" }}>
+        <span>OLHOS (OCR)</span>
+      </div>
+      <OcrSettings />
 
       <p className="bg-note" style={{ marginTop: "1rem" }}>
         O porteiro redige senha/CPF/cartão e pula apps de banco/senha antes de
