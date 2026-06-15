@@ -61,6 +61,11 @@ fn patterns() -> &'static Vec<Regex> {
             r"\b[A-Za-z0-9_\-]{32,}\b",
             // linhas com "senha"/"password" seguidas de algo
             r"(?i)(senha|password|passwd|pwd)\s*[:=]\s*\S+",
+            // caminhos Windows: UNC (\\servidor\share\...) e absoluto com ao menos
+            // uma subpasta (C:\Users\...) — costumam ter usuário/pastas sensíveis.
+            // Exige subpasta pra não redigir títulos benignos tipo "Erro em C:\".
+            r"\\\\[^\s\\]+\\[^\s]*",
+            r"\b[A-Za-z]:\\[^\s\\]+\\[^\s]*",
         ];
         raw.iter().filter_map(|p| Regex::new(p).ok()).collect()
     })
@@ -120,6 +125,17 @@ mod tests {
         let out = redact("contato: joao.silva@empresa.com.br aqui");
         assert!(out.contains("[REDIGIDO]"));
         assert!(!out.contains("joao.silva@empresa.com.br"));
+    }
+
+    #[test]
+    fn redacts_windows_paths() {
+        let unc = redact(r"abrindo \\corp\financeiro\segredos.xlsx agora");
+        assert!(unc.contains("[REDIGIDO]"));
+        assert!(!unc.contains("financeiro"));
+
+        let abs = redact(r"salvo em C:\Users\admin\Documentos\plano.docx");
+        assert!(abs.contains("[REDIGIDO]"));
+        assert!(!abs.contains("admin"));
     }
 
     #[test]

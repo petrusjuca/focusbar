@@ -15,6 +15,66 @@ fn now_ts() -> i64 {
         .unwrap_or(0)
 }
 
+/// Palavras genéricas que não contam como "tópico" do foco.
+const STOP: &[&str] = &[
+    "para", "prova", "sobre", "como", "isso", "esse", "essa", "tema", "fazer",
+    "minha", "minhas", "meus", "pelo", "pela", "hoje", "dele", "trabalho",
+    "coisa", "estudar", "terminar", "fazendo", "preciso",
+];
+
+/// Normaliza pra casar tópicos: minúsculas + remove acentos comuns do PT.
+/// Resultado é ASCII (seguro pra fatiar por byte). "Cálculo" e "calculo" viram
+/// a mesma coisa — corrige o erro silencioso mais comum em português.
+fn fold(s: &str) -> String {
+    s.chars()
+        .flat_map(|c| c.to_lowercase())
+        .map(|c| match c {
+            'á' | 'à' | 'â' | 'ã' | 'ä' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            'í' | 'ì' | 'î' | 'ï' => 'i',
+            'ó' | 'ò' | 'ô' | 'õ' | 'ö' => 'o',
+            'ú' | 'ù' | 'û' | 'ü' => 'u',
+            'ç' => 'c',
+            'ñ' => 'n',
+            other => other,
+        })
+        .collect()
+}
+
+/// O texto da janela (AX/título) está fraco demais pra julgar pelo conteúdo?
+/// Curto, ou com poucas palavras distintas, ou só ruído de UI → vale acionar o
+/// OCR de pixel. Evita o caso "40 chars de boilerplate passam no gate antigo".
+fn extra_is_weak(text: &str) -> bool {
+    let t = text.trim();
+    if t.chars().count() < 40 {
+        return true;
+    }
+    let distinct: std::collections::HashSet<&str> = t
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.chars().count() >= 3)
+        .collect();
+    distinct.len() < 4
+}
+
+/// Procura uma palavra-chave do foco (≥5 letras, fora da STOP) dentro de um
+/// texto JÁ normalizado por `fold`. Tolera plural simples (sufixo "s").
+fn focus_keyword_in(focus: &str, hay_folded: &str) -> Option<String> {
+    fold(focus)
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.chars().count() >= 5 && !STOP.contains(w))
+        .map(|w| w.to_string())
+        .find_map(|w| {
+            if hay_folded.contains(&w) {
+                Some(w)
+            } else if w.len() >= 6 && w.ends_with('s') && hay_folded.contains(&w[..w.len() - 1])
+            {
+                Some(w[..w.len() - 1].to_string())
+            } else {
+                None
+            }
+        })
+}
+
 #[tauri::command]
 pub fn set_focus(state: State<AppState>, text: String) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
@@ -120,7 +180,7 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
     // "Olhos" Estágio 2 (OCR de pixel): só se a AX veio fraca/vazia, o OCR está
     // LIGADO e há permissão de Gravação de Tela. Lê o texto da janela em foco via
     // OCR nativo (Apple Vision / Windows OCR), em memória. Passa pelo porteiro.
-    if extra.trim().len() < 40
+    if extra_is_weak(&extra)
         && ocr_enabled
         && crate::capture::screen::screen_recording_granted()
     {
@@ -133,19 +193,8 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
     //      palavra-chave do foco, está NO FOCO. Ex.: foco "estudar cálculo" +
     //      página de Cálculo → no foco. Corrige o 3B errando o óbvio.
     {
-        let hay = format!("{} {} {}", app, title, extra).to_lowercase();
-        const STOP: &[&str] = &[
-            "para", "prova", "sobre", "como", "isso", "esse", "essa", "tema",
-            "fazer", "minha", "minhas", "meus", "pelo", "pela", "hoje", "dele",
-            "trabalho", "coisa", "estudar",
-        ];
-        let kw = focus
-            .to_lowercase()
-            .split(|c: char| !c.is_alphanumeric())
-            .filter(|w| w.chars().count() >= 5 && !STOP.contains(w))
-            .find(|w| hay.contains(*w))
-            .map(|w| w.to_string());
-        if let Some(kw) = kw {
+        let hay = fold(&format!("{} {} {}", app, title, extra));
+        if let Some(kw) = focus_keyword_in(&focus, &hay) {
             return Ok(FocusCheck {
                 focus: Some(focus),
                 app: Some(app),
@@ -169,16 +218,28 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
         });
     }
 
-    // 3) Sem Ollama: cai pra regra pelo site (mais burra, mas instantânea).
+    // 3) Sem Ollama: antes da regra burra, reaproveita o texto que JÁ lemos
+    //    (OCR/AX) — se o conteúdo cita o foco, é um palpite informado de "no foco".
+    if let Some(kw) = focus_keyword_in(&focus, &fold(&extra)) {
+        return Ok(FocusCheck {
+            focus: Some(focus),
+            app: Some(app),
+            on_task: Some(true),
+            reason: format!("O conteúdo mostra \"{}\" (sem Ollama, é um palpite).", kw),
+            source: "match".into(),
+        });
+    }
+
+    // 4) Último recurso: regra pela categoria do app (estimativa honesta).
     let on_task = cat != "Procrastinação";
     let reason = if on_task {
         format!(
-            "{} costuma ser trabalho. Ligue o Ollama (aba Assistente) pra eu avaliar pelo conteúdo.",
+            "Pela categoria, {} costuma ser trabalho — mas é só estimativa. Ligue o Ollama (aba Assistente) pra eu julgar pelo conteúdo.",
             app
         )
     } else {
         format!(
-            "{} costuma ser distração. Ligue o Ollama (aba Assistente) pra eu avaliar pelo conteúdo.",
+            "Pela categoria, {} costuma ser distração — mas é só estimativa. Ligue o Ollama (aba Assistente) pra eu julgar pelo conteúdo.",
             app
         )
     };
@@ -203,4 +264,53 @@ pub fn set_focus_judgment(
         .map_err(|e| e.to_string())?
         .ok_or("Sem foco definido.")?;
     db::set_focus_rule(&conn, &focus, &app, on_task).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn fold_remove_acentos() {
+        assert_eq!(fold("Cálculo"), "calculo");
+        assert_eq!(fold("AÇÃO"), "acao");
+        assert_eq!(fold("relatório"), "relatorio");
+    }
+
+    #[test]
+    fn match_ignora_acento_e_caixa() {
+        // foco com acento casa com texto sem acento (e vice-versa)
+        assert_eq!(
+            focus_keyword_in("estudar cálculo", &fold("Lista 3 - calculo 1.pdf")),
+            Some("calculo".into())
+        );
+        assert_eq!(
+            focus_keyword_in("relatorio do projeto", &fold("Relatório Q4 — Docs")),
+            Some("relatorio".into())
+        );
+    }
+
+    #[test]
+    fn match_tolera_plural() {
+        assert_eq!(
+            focus_keyword_in("derivadas", &fold("aula de derivada")),
+            Some("derivada".into())
+        );
+    }
+
+    #[test]
+    fn match_ignora_stopwords_e_curtas() {
+        // só "trabalho"(stop) e "no"(curta) → nenhum tópico real
+        assert_eq!(focus_keyword_in("trabalho", &fold("YouTube - novela")), None);
+    }
+
+    #[test]
+    fn weak_detecta_texto_fraco() {
+        assert!(extra_is_weak(""));
+        assert!(extra_is_weak("Nova aba"));
+        assert!(extra_is_weak("a b c d e f")); // muitas palavras curtas (<3)
+        assert!(!extra_is_weak(
+            "Cálculo diferencial: máximos e mínimos por derivada primeira"
+        ));
+    }
 }

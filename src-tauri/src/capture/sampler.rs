@@ -42,10 +42,34 @@ fn idle_secs() -> i64 {
         .unwrap_or(0)
 }
 
-/// Apps que NÃO são foco real (tela de bloqueio, servidor de janelas) — ruído.
+/// Apps que NÃO são foco real (tela de bloqueio, shell do SO) — ruído.
 fn is_system_noise(app: &str) -> bool {
     let a = app.to_lowercase();
-    a == "loginwindow" || a == "windowserver" || a == "screensaverengine"
+    // macOS
+    if a == "loginwindow" || a == "windowserver" || a == "screensaverengine" {
+        return true;
+    }
+    // Windows: tela de bloqueio, UAC, shell e processos de sistema. (NÃO inclui
+    // "explorer" pra não descartar o uso real do Explorador de Arquivos.)
+    matches!(
+        a.as_str(),
+        "lockapp"
+            | "lockapp.exe"
+            | "winlogon"
+            | "winlogon.exe"
+            | "csrss"
+            | "csrss.exe"
+            | "dwm"
+            | "dwm.exe"
+            | "conhost"
+            | "conhost.exe"
+            | "searchhost"
+            | "searchhost.exe"
+            | "shellexperiencehost"
+            | "startmenuexperiencehost"
+            | "applicationframehost"
+            | "textinputhost"
+    )
 }
 
 pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>) {

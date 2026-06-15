@@ -64,6 +64,10 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             key   TEXT PRIMARY KEY,
             value TEXT NOT NULL
         );
+        -- OCR (Estágio 2 dos olhos) LIGADO por padrão: dá visão de conteúdo no
+        -- Windows (sem AX) e reforça no Mac. Idempotente — nunca sobrescreve a
+        -- escolha do usuário (só semeia o default na 1ª criação).
+        INSERT OR IGNORE INTO settings(key, value) VALUES ('ocr_enabled', '1');
 
         CREATE TABLE IF NOT EXISTS focus_log (
             id   INTEGER PRIMARY KEY,

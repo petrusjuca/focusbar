@@ -11,6 +11,9 @@ const RULES: &[(&str, &[&str])] = &[
             "proxy", "adspower", "notion", "planilha", "sheets", "docs", "slides",
             "meet", "zoom", "gmail", "outlook", "mail", "calendar", "drive",
             "linear", "jira", "trello", "asana", "slack",
+            // Windows / Office nativo
+            "excel", "word", "winword", "powerpoint", "powerpnt", "msoffice",
+            "access", "visio", "onenote", "teams",
         ],
     ),
     (
@@ -19,6 +22,9 @@ const RULES: &[(&str, &[&str])] = &[
             "vscode", "visual studio code", "code", "terminal", "iterm", "xcode",
             "github", "gitlab", "localhost", "cargo", "npm", "focusbar", "figma",
             "postman", "docker", "warp",
+            // Windows nativo
+            "notepad", "notepad++", "powershell", "cmd", "command prompt",
+            "explorer", "visual studio", "rider", "intellij", "sublime", "wsl",
         ],
     ),
     (
@@ -26,7 +32,7 @@ const RULES: &[(&str, &[&str])] = &[
         &[
             "youtube", "discord", "roblox", "whatsapp", "instagram", "twitter",
             "x.com", "reddit", "tiktok", "netflix", "twitch", "steam", "spotify",
-            "tierlist", "game",
+            "tierlist", "game", "epic games", "xbox", "bethesda", "battle.net",
         ],
     ),
 ];
@@ -45,10 +51,24 @@ pub fn effective(overrides: &HashMap<String, String>, app_name: &str, title: &st
 }
 
 /// Categoria de uma sessão. Casa contra "app título" em minúsculo.
+/// Chaves de uma palavra casam por TOKEN inteiro (evita "word" dentro de
+/// "password", "access" em "accessibility"); chaves com espaço/pontuação
+/// (ex.: "visual studio code", "x.com", "notepad++") casam por substring.
 pub fn categorize(app_name: &str, title: &str) -> &'static str {
     let hay = format!("{} {}", app_name, title).to_lowercase();
+    let tokens: std::collections::HashSet<&str> = hay
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|s| !s.is_empty())
+        .collect();
     for (cat, keywords) in RULES {
-        if keywords.iter().any(|k| hay.contains(k)) {
+        let hit = keywords.iter().any(|k| {
+            if k.chars().any(|c| !c.is_alphanumeric()) {
+                hay.contains(*k) // chave composta/pontuada: substring
+            } else {
+                tokens.contains(*k) // palavra única: token exato
+            }
+        });
+        if hit {
             return cat;
         }
     }
@@ -95,5 +115,20 @@ mod tests {
         let mut ov = HashMap::new();
         ov.insert("YouTube".to_string(), String::new());
         assert_eq!(effective(&ov, "YouTube", "vídeo"), "Procrastinação");
+    }
+
+    #[test]
+    fn windows_apps_categorize() {
+        assert_eq!(categorize("Excel", "Orçamento 2026"), "Trabalho");
+        assert_eq!(categorize("Notepad", "notas.txt"), "Ferramenta");
+        assert_eq!(categorize("Xbox", "Halo Infinite"), "Procrastinação");
+    }
+
+    #[test]
+    fn no_substring_false_positives() {
+        // chaves de uma palavra não casam DENTRO de palavras maiores:
+        assert_eq!(categorize("Chrome", "password manager"), "Outro"); // word ⊄ password
+        assert_eq!(categorize("Chrome", "accessibility options"), "Outro"); // access ⊄ ...
+        assert_eq!(categorize("Chrome", "codecademy lesson"), "Outro"); // code ⊄ codecademy
     }
 }

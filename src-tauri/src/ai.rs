@@ -119,12 +119,26 @@ do projeto AJUDA.\n\
 Foco/tarefa atual: \"{focus}\".\n\
 Atividade agora: {app} — {title}\n\
 {screen}\
-Isso ajuda no foco ou é distração? Responda em UMA linha curta começando exatamente com \
-SIM (ajuda) ou NAO (distração), e um motivo bem curto citando o ASSUNTO que você viu."
+Isso ajuda no foco ou é distração? Responda SEMPRE em português, em UMA linha curta \
+começando EXATAMENTE com a palavra SIM (ajuda) ou NAO (distração), seguida de um motivo \
+bem curto citando o ASSUNTO que você viu. Não comece com nenhuma outra palavra."
     );
     let resp = generate(prompt).await?;
-    let up = resp.trim().to_uppercase();
-    let on_task = !(up.starts_with("NAO") || up.starts_with("NÃO") || up.starts_with("N,"));
+    // Parser robusto: primeira "palavra" só com letras/dígitos. Ambíguo (não
+    // começa com SIM/NAO/YES/NO) → Err, pra cair no fallback honesto em vez de
+    // marcar "no foco" por engano (o 3B às vezes responde em inglês: "No, ...").
+    let first: String = resp
+        .trim()
+        .chars()
+        .skip_while(|c| !c.is_alphanumeric())
+        .take_while(|c| c.is_alphanumeric())
+        .collect::<String>()
+        .to_uppercase();
+    let on_task = match first.as_str() {
+        "SIM" | "S" | "YES" | "Y" => true,
+        "NAO" | "NÃO" | "N" | "NO" | "NOT" => false,
+        _ => return Err(format!("modelo não respondeu claramente: {first:?}")),
+    };
     Ok((on_task, resp.trim().to_string()))
 }
 
@@ -152,10 +166,18 @@ pub async fn generate(prompt: String) -> Result<String, String> {
         keep_alive: "2m".to_string(),
         options: GenOpts {
             temperature: 0.3,
-            num_predict: 700,
+            // A resposta é UMA linha (SIM/NAO + motivo curto); 200 evita o 3B
+            // divagar antes do token decisivo.
+            num_predict: 200,
         },
     };
-    let resp = reqwest::Client::new()
+    // Timeout: se o modelo travar/recarregar (pós-reinício, OOM), a checagem de
+    // foco NÃO pode congelar — devolve Err e o chamador cai pro fallback.
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(8))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
         .post(format!("{}/api/generate", base()))
         .json(&body)
         .send()
