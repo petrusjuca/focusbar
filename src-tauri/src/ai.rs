@@ -9,8 +9,11 @@ use serde::{Deserialize, Serialize};
 /// com `https://` E `FOCUSBAR_LLM_REMOTE_OK=1`; caso contrário cai de volta no localhost
 /// (dados não saem da máquina sem opt-in explícito).
 fn base() -> String {
+    // IPv4 explícito (127.0.0.1), NÃO "localhost": em Mac/Windows o "localhost"
+    // costuma resolver pra ::1 (IPv6) primeiro, mas o Ollama escuta só em IPv4 —
+    // aí o reqwest falha com "error sending request". Forçar 127.0.0.1 resolve.
     let url = std::env::var("FOCUSBAR_LLM_URL")
-        .unwrap_or_else(|_| "http://localhost:11434".to_string());
+        .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string());
     if is_loopback(&url) {
         return url;
     }
@@ -21,7 +24,7 @@ fn base() -> String {
         url
     } else {
         // Recusa silenciosa: volta pro local em vez de mandar dados pra fora.
-        "http://localhost:11434".to_string()
+        "http://127.0.0.1:11434".to_string()
     }
 }
 
@@ -96,39 +99,57 @@ pub async fn has_model() -> bool {
     }
 }
 
-/// Julga se a janela atual ajuda no foco declarado ou é distração.
-/// Retorna (no_foco, motivo_curto). Best-effort (3B pode errar).
+/// Veredito da IA: ajuda no foco? + a PROVA (trecho que o modelo diz ter lido).
+/// O chamador VERIFICA se `evidence` existe mesmo na tela — se não, a IA
+/// inventou (alucinou pela "funcionalidade" do app) e o veredito é descartado.
+pub struct OnTaskJudgment {
+    pub on_task: bool,
+    pub evidence: String,
+}
+
+/// Pega o que vem depois de "marcador:" numa linha que contenha o marcador.
+fn line_value(resp: &str, marker_lower: &str) -> Option<String> {
+    resp.lines().find_map(|line| {
+        if line.to_lowercase().contains(marker_lower) {
+            line.splitn(2, ':').nth(1).map(|s| s.trim().to_string())
+        } else {
+            None
+        }
+    })
+}
+
+/// Julga se a janela ajuda no foco — ANCORADO no que está escrito na tela.
+/// O modelo precisa COPIAR um trecho exato como prova; quem chama confere se o
+/// trecho existe (anti-alucinação). Best-effort (3B pode errar).
 pub async fn on_task_check(
     focus: &str,
     app: &str,
     title: &str,
     extra: &str,
-) -> Result<(bool, String), String> {
-    // "Olhos" Estágio 1: trecho do texto visível na janela (lido pela AX).
+) -> Result<OnTaskJudgment, String> {
     let screen = if extra.trim().is_empty() {
-        String::new()
+        "(sem texto legível)".to_string()
     } else {
-        format!("Texto visível na janela (use pra entender o assunto real): \"{}\"\n", extra.trim())
+        format!("\"{}\"", extra.trim())
     };
     let prompt = format!(
-        "Você ajuda alguém com TDAH a manter o foco. Julgue pelo CONTEÚDO concreto: \
-o título E o texto visível dizem o ASSUNTO real — use isso, não o nome do app ou site. \
-Exemplos: um vídeo 'Cálculo 1 - máximos e mínimos por derivada' no YouTube AJUDA quem \
-quer estudar cálculo; um 'Nintendo Direct' ou uma novela é DISTRAÇÃO; um doc com o nome \
-do projeto AJUDA.\n\
-Foco/tarefa atual: \"{focus}\".\n\
-Atividade agora: {app} — {title}\n\
-{screen}\
-Isso ajuda no foco ou é distração? Responda SEMPRE em português, em UMA linha curta \
-começando EXATAMENTE com a palavra SIM (ajuda) ou NAO (distração), seguida de um motivo \
-bem curto citando o ASSUNTO que você viu. Não comece com nenhuma outra palavra."
+        "Você decide se a janela atual AJUDA no foco do usuário.\n\
+REGRA DURA: julgue SÓ pelo TÍTULO e pelo TEXTO DA TELA abaixo. NUNCA deduza pelo \
+que o app/site/ferramenta normalmente SERVE — vale só o que está ESCRITO. Se o que \
+está escrito não deixar o assunto claro, diga que não dá pra saber.\n\
+Foco do usuário: \"{focus}\".\n\
+Janela: {app} — {title}\n\
+Texto na tela: {screen}\n\n\
+Responda em DUAS linhas, em português:\n\
+VEREDITO: SIM (ajuda) ou NAO (distração)\n\
+PROVA: copie de 2 a 8 palavras EXATAS do título ou do texto acima que mostram o \
+assunto. Se nada acima deixar claro, escreva exatamente: PROVA: nada"
     );
     let resp = generate(prompt).await?;
-    // Parser robusto: primeira "palavra" só com letras/dígitos. Ambíguo (não
-    // começa com SIM/NAO/YES/NO) → Err, pra cair no fallback honesto em vez de
-    // marcar "no foco" por engano (o 3B às vezes responde em inglês: "No, ...").
-    let first: String = resp
-        .trim()
+
+    // Veredito: primeira palavra alfanumérica da linha VEREDITO (ou da resposta).
+    let vline = line_value(&resp, "veredito").unwrap_or_else(|| resp.clone());
+    let first: String = vline
         .chars()
         .skip_while(|c| !c.is_alphanumeric())
         .take_while(|c| c.is_alphanumeric())
@@ -139,7 +160,12 @@ bem curto citando o ASSUNTO que você viu. Não comece com nenhuma outra palavra
         "NAO" | "NÃO" | "N" | "NO" | "NOT" => false,
         _ => return Err(format!("modelo não respondeu claramente: {first:?}")),
     };
-    Ok((on_task, resp.trim().to_string()))
+
+    let evidence = line_value(&resp, "prova")
+        .unwrap_or_default()
+        .trim_matches(|c: char| c == '"' || c == '\'' || c.is_whitespace())
+        .to_string();
+    Ok(OnTaskJudgment { on_task, evidence })
 }
 
 /// Baixa o modelo via Ollama (bloqueia até terminar — pode levar minutos).
@@ -171,10 +197,12 @@ pub async fn generate(prompt: String) -> Result<String, String> {
             num_predict: 200,
         },
     };
-    // Timeout: se o modelo travar/recarregar (pós-reinício, OOM), a checagem de
-    // foco NÃO pode congelar — devolve Err e o chamador cai pro fallback.
+    // Timeout teto: evita travar pra sempre se o Ollama enroscar. 45s dá folga
+    // pro 1º uso com o modelo FRIO (carregar um 3B na RAM pode passar de 10s) —
+    // 8s estourava no cold start e dava "error sending request". É async: uma
+    // checagem lenta não congela a UI, só responde mais tarde.
     let client = reqwest::Client::builder()
-        .timeout(std::time::Duration::from_secs(8))
+        .timeout(std::time::Duration::from_secs(45))
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client

@@ -205,17 +205,25 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
         }
     }
 
-    // 2) IA julga pelo CONTEÚDO: título + texto da tela = o ASSUNTO real, não o
-    //    nome do site. Ex.: vídeo de "Cálculo 1 - derivadas" → estudo; novela →
-    //    distração; PDF com o nome do projeto → trabalho. (Precisa do Ollama.)
-    if let Ok((on_task, reason)) = ai::on_task_check(&focus, &app, &title, &extra).await {
-        return Ok(FocusCheck {
-            focus: Some(focus),
-            app: Some(app),
-            on_task: Some(on_task),
-            reason,
-            source: "ia".into(),
-        });
+    // 2) IA julga pelo CONTEÚDO — mas ANCORADA: ela precisa copiar um trecho
+    //    real da tela como prova. Se o trecho não existir de verdade (modelo
+    //    inventou pela "funcionalidade" do app), DESCARTAMOS o veredito e caímos
+    //    no fallback determinístico. Assim a IA só "fala" o que dá pra comprovar.
+    if let Ok(j) = ai::on_task_check(&focus, &app, &title, &extra).await {
+        let ev = j.evidence.trim();
+        let grounded = ev.len() >= 3
+            && ev.to_lowercase() != "nada"
+            && fold(&format!("{} {}", title, extra)).contains(&fold(ev));
+        if grounded {
+            return Ok(FocusCheck {
+                focus: Some(focus),
+                app: Some(app),
+                on_task: Some(j.on_task),
+                reason: format!("Vi na tela: \"{}\".", ev),
+                source: "ia".into(),
+            });
+        }
+        // Sem prova verificável → a IA não ancorou. Ignora e segue pro fallback.
     }
 
     // 3) Sem Ollama: antes da regra burra, reaproveita o texto que JÁ lemos
