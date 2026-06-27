@@ -103,45 +103,18 @@ mod imp {
     }
 }
 
-// ───────────────────────── Windows (validado no CI) ─────────────────────────
+// ───────────────────────── Windows ─────────────────────────
+// TODO(windows): áudio (WASAPI IAudioMeterInformation) + lock (WTS) entram numa
+// leva dedicada, com as assinaturas do windows-rs 0.62 pesquisadas ANTES do CI
+// (a ativação COM IMMDevice::Activate exige cuidado). Por ora stub=false: o idle
+// é o sinal primário e já roda no Windows; só os estados Passivo/Ausente-incerto
+// ficam adormecidos até lá.
 #[cfg(target_os = "windows")]
 mod imp {
     pub fn audio_active() -> bool {
-        use windows::core::Interface;
-        use windows::Win32::Media::Audio::Endpoints::IAudioMeterInformation;
-        use windows::Win32::Media::Audio::{
-            eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
-        };
-        use windows::Win32::System::Com::{
-            CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
-        };
-        unsafe {
-            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
-            let enumerator: IMMDeviceEnumerator =
-                match CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) {
-                    Ok(e) => e,
-                    Err(_) => return false,
-                };
-            let device = match enumerator.GetDefaultAudioEndpoint(eRender, eConsole) {
-                Ok(d) => d,
-                Err(_) => return false,
-            };
-            let meter: IAudioMeterInformation =
-                match device.Activate::<IAudioMeterInformation>(CLSCTX_ALL, None) {
-                    Ok(m) => m,
-                    Err(_) => return false,
-                };
-            match meter.GetPeakValue() {
-                Ok(peak) => peak > 0.01,
-                Err(_) => false,
-            }
-        }
+        false
     }
-
     pub fn locked() -> bool {
-        // TODO(windows): detecção de tela bloqueada via WTS (WTSINFOEX.SessionFlags)
-        // — tem armadilhas de API/union que precisam validar no CI. Por ora false:
-        // o idle (>=5min) já marca "ausente"; o lock só deixaria isso imediato.
         false
     }
 }

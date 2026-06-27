@@ -1610,7 +1610,6 @@ dependencies = [
  "tauri-plugin-opener",
  "uni-ocr",
  "user-idle",
- "windows 0.62.2",
  "xcap",
 ]
 
