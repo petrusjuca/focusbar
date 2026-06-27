@@ -77,6 +77,13 @@ pub struct IntervalMarker {
     pub end_ts: Option<i64>,
 }
 
+/// Caminho do servidor MCP local + se o binário está presente no bundle.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct McpInfo {
+    pub path: String,
+    pub exists: bool,
+}
+
 /// Métricas cruas do dia (painel de dados / debug — expõe tudo que capturamos).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DayMetrics {

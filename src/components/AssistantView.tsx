@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { CopyToClaudeButton } from "./CopyToClaudeButton";
 import { OcrSettings } from "./OcrSettings";
+import { McpSettings } from "./McpSettings";
 import { friendlyError } from "../format";
 
 interface AiStatus {
@@ -202,6 +203,11 @@ export function AssistantView() {
         <span>OLHOS (OCR)</span>
       </div>
       <OcrSettings />
+
+      <div className="daily-header" style={{ marginTop: "1.5rem" }}>
+        <span>CLAUDE LÊ SEUS DADOS (MCP)</span>
+      </div>
+      <McpSettings />
 
       <p className="bg-note" style={{ marginTop: "1rem" }}>
         O porteiro redige senha/CPF/cartão e pula apps de banco/senha antes de

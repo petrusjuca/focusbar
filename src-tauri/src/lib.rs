@@ -4,12 +4,13 @@
 
 mod ai;
 mod capture;
-mod category;
+// Públicos para o binário `mcp` (servidor MCP local) reusar as queries e tipos.
+pub mod category;
 mod coach;
 mod commands;
-mod db;
+pub mod db;
 mod insights;
-mod models;
+pub mod models;
 mod redact;
 mod reminders;
 mod state;
@@ -19,8 +20,8 @@ use commands::assistant::{
     ai_available, ai_day_digest, ai_day_review, ai_pull_model, ai_status, start_ollama,
 };
 use commands::config::{
-    categorize_pending, get_focus_time, get_ocr_enabled, get_setting, log_focus_time,
-    log_pomodoro, set_ocr_enabled, set_setting,
+    categorize_pending, get_focus_time, get_mcp_info, get_ocr_enabled, get_setting,
+    log_focus_time, log_pomodoro, set_ocr_enabled, set_setting,
 };
 use commands::focus::{check_focus, get_focus, set_focus, set_focus_judgment};
 use commands::notes::{add_note, delete_note, list_notes};
@@ -234,6 +235,7 @@ pub fn run() {
             set_focus_judgment,
             get_ocr_enabled,
             set_ocr_enabled,
+            get_mcp_info,
             get_setting,
             set_setting,
             categorize_pending,

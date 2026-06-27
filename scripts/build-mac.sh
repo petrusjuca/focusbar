@@ -21,7 +21,18 @@ echo "→ buildando (release)"
 cd "$ROOT"
 npm run tauri build -- --bundles app
 
+echo "→ empacotando o servidor MCP local no bundle"
+cargo build --release --manifest-path "$ROOT/src-tauri/Cargo.toml" --bin mcp
+MCP_BIN="$ROOT/src-tauri/target/release/mcp"
+if [ -f "$MCP_BIN" ]; then
+  cp "$MCP_BIN" "$APP/Contents/MacOS/mcp"
+  echo "  mcp → $APP/Contents/MacOS/mcp"
+else
+  echo "  (aviso: binario mcp nao encontrado; segui sem ele)"
+fi
+
 echo "→ assinando com a identidade estável ($IDENTITY)"
+# --deep assina também o mcp aninhado no bundle.
 codesign --force --deep --sign "$IDENTITY" --keychain "$KCHAIN" "$APP"
 codesign --verify --verbose "$APP"
 

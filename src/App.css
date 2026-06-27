@@ -751,6 +751,38 @@ h1 {
   color: inherit;
 }
 
+/* MCP — comandos copiáveis */
+.mcp-block {
+  margin-top: 0.7rem;
+}
+
+.mcp-label {
+  font-size: 0.78rem;
+  color: #9b9ba0;
+  margin-bottom: 0.25rem;
+}
+
+.mcp-code {
+  display: block;
+  background: rgba(127, 127, 127, 0.12);
+  border-radius: 8px;
+  padding: 0.4rem 0.55rem;
+  font-size: 0.76rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  word-break: break-all;
+  white-space: pre-wrap;
+}
+
+.mcp-pre {
+  white-space: pre;
+  overflow-x: auto;
+  word-break: normal;
+}
+
+.mcp-block .link-btn {
+  margin-top: 0.3rem;
+}
+
 .cat-bar {
   display: flex;
   height: 26px;

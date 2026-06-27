@@ -72,6 +72,22 @@ pub fn set_ocr_enabled(state: State<AppState>, on: bool) -> Result<(), String> {
     db::set_setting(&conn, "ocr_enabled", if on { "1" } else { "0" }).map_err(|e| e.to_string())
 }
 
+/// Caminho do servidor MCP local (binário `mcp` ao lado do app) e se ele existe.
+/// O front monta o comando do Claude a partir disso. É o "Claude lê seus dados
+/// sem API": você aponta o seu Claude pro servidor, que lê o SQLite local.
+#[tauri::command]
+pub fn get_mcp_info() -> Result<crate::models::McpInfo, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let mcp = exe
+        .parent()
+        .map(|p| p.join("mcp"))
+        .ok_or_else(|| "nao achei a pasta do app".to_string())?;
+    Ok(crate::models::McpInfo {
+        path: mcp.to_string_lossy().to_string(),
+        exists: mcp.exists(),
+    })
+}
+
 /// Lê uma config genérica (onboarding, horário de fim de dia…). None = não setada.
 #[tauri::command]
 pub fn get_setting(state: State<AppState>, key: String) -> Result<Option<String>, String> {
