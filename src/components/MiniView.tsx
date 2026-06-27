@@ -26,8 +26,31 @@ export function MiniView({
 }) {
   const [focus, setFocus] = useState("");
   const [check, setCheck] = useState<FocusCheck | null>(null);
+  const [intention, setIntention] = useState("");
   const { open, toggle } = useTodos(5000);
   const rootRef = useRef<HTMLDivElement>(null);
+
+  // Norte do dia — visível no card (o mini é onde você vive).
+  useEffect(() => {
+    let on = true;
+    async function load() {
+      try {
+        const notes = await invoke<{ kind: string; text: string }[]>("list_notes", {
+          day: null,
+        });
+        const ints = notes.filter((n) => n.kind === "intention");
+        if (on) setIntention(ints.length ? ints[ints.length - 1].text : "");
+      } catch {
+        /* ignore */
+      }
+    }
+    load();
+    const id = setInterval(load, 20000);
+    return () => {
+      on = false;
+      clearInterval(id);
+    };
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -184,6 +207,12 @@ export function MiniView({
         <div className="agent-dir" data-tauri-drag-region>
           {dir}
         </div>
+
+        {!running && intention && (
+          <div className="agent-intent" title={intention} data-tauri-drag-region>
+            🎯 {intention}
+          </div>
+        )}
 
         {running ? (
           <div className="agent-timer">

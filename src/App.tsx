@@ -1,4 +1,4 @@
-import { useEffect, useState, lazy, Suspense } from "react";
+import { useEffect, useRef, useState, lazy, Suspense } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -186,6 +186,21 @@ function App() {
       .catch(() => {});
   }, []);
 
+  // Mini é o PROTAGONISTA: ao abrir (depois do onboarding), entra no card
+  // flutuante por padrão. A janela grande é o "expandir" (config/histórico).
+  // Respeita a escolha: se você saiu pro modo grande, ele lembra ("full").
+  const autoMiniDone = useRef(false);
+  useEffect(() => {
+    if (autoMiniDone.current || onboarded !== true) return;
+    autoMiniDone.current = true;
+    invoke<string | null>("get_setting", { key: "ui_mode" })
+      .then((m) => {
+        if (m !== "full") enterMini();
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [onboarded]);
+
   // Categorizador por CONTEÚDO (em background): a IA lê o que estava na tela e
   // classifica a atividade — em vez de chutar pelo nome do app. Para sozinho se
   // o Ollama estiver off. O poll de dados (20s) reflete as categorias novas.
@@ -241,6 +256,7 @@ function App() {
       }
       await w.setSize(new LogicalSize(264, 150));
       setMini(true);
+      invoke("set_setting", { key: "ui_mode", value: "mini" }).catch(() => {});
     } catch (e) {
       setError(friendlyError(e));
     }
@@ -260,6 +276,7 @@ function App() {
       const s = prevSize ?? { w: 800, h: 720 };
       await w.setSize(new LogicalSize(s.w, s.h));
       setMini(false);
+      invoke("set_setting", { key: "ui_mode", value: "full" }).catch(() => {});
     } catch (e) {
       setError(friendlyError(e));
     }

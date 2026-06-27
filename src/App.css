@@ -2262,6 +2262,17 @@ html[data-theme="light"] .agent {
 .agent.paused .agent-dir {
   color: var(--text-dim);
 }
+/* Intenção do dia no mini — o norte, sempre à vista (mini protagonista) */
+.agent-intent {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0.1rem 0.05rem;
+  border-left: 2px solid var(--accent);
+  padding-left: 0.45rem;
+}
 
 /* CTA principal: abrir o agente de foco (topo da janela cheia) */
 .agent-cta {
