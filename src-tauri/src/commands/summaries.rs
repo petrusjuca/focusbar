@@ -188,6 +188,23 @@ pub fn set_app_category(
     db::set_app_category(&conn, &app, &category).map_err(|e| e.to_string())
 }
 
+/// Recategoriza UM bloco da linha do tempo (1 clique). `until_ts` é o começo do
+/// próximo bloco (ou agora+1 se for o último) — assim só as sessões deste bloco
+/// mudam, sem afetar outros usos do mesmo app no dia.
+#[tauri::command]
+pub fn set_block_category(
+    state: State<AppState>,
+    app: String,
+    start_ts: i64,
+    until_ts: i64,
+    category: String,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::set_block_category(&conn, &app, start_ts, until_ts, &category)
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Dicas/insights do dia (o que melhorar), por regras.
 #[tauri::command]
 pub fn get_day_insights(

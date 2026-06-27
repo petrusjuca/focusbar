@@ -36,7 +36,7 @@ use commands::reminders::{
 use commands::sessions::{delete_app_sessions, delete_session, get_recent_sessions};
 use commands::summaries::{
     get_category_summary, get_daily_summary, get_day_insights, get_day_markers, get_day_sessions,
-    get_metrics, get_weekly_summary, set_app_category,
+    get_metrics, get_weekly_summary, set_app_category, set_block_category,
 };
 use models::ActiveWindow;
 use state::AppState;
@@ -222,6 +222,7 @@ pub fn run() {
             list_notes,
             delete_note,
             set_app_category,
+            set_block_category,
             add_todo,
             list_todos,
             toggle_todo,

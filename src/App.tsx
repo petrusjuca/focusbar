@@ -14,6 +14,7 @@ import type {
 } from "./types";
 import { fmtClock, fmtDuration, fmtTime, friendlyError } from "./format";
 import { FocusTimeline } from "./components/FocusTimeline";
+import { SessionBlocks } from "./components/SessionBlocks";
 import { CategoryBreakdown } from "./components/CategoryBreakdown";
 import { InsightsPanel } from "./components/InsightsPanel";
 import { RemindersView } from "./components/RemindersView";
@@ -540,6 +541,18 @@ function App() {
               )}
               <CategoryBreakdown data={categories} apps={summary?.by_app ?? []} />
               <FocusTimeline sessions={daySessions} markers={dayMarkers} />
+              <SessionBlocks
+                sessions={daySessions}
+                onChanged={async () => {
+                  // Recarrega só o que a correção muda: blocos + resumo por categoria.
+                  const [dayS, cats] = await Promise.all([
+                    invoke<FocusSession[]>("get_day_sessions", { day: null }),
+                    invoke<CategoryTotal[]>("get_category_summary", { day: null }),
+                  ]);
+                  setDaySessions(dayS);
+                  setCategories(cats);
+                }}
+              />
 
               <div className="sessions">
             <div className="sessions-header">

@@ -690,6 +690,67 @@ h1 {
   font-size: 0.8rem;
 }
 
+/* Blocos do dia — correção de categoria em 1 clique */
+.blocks {
+  margin-top: 1rem;
+}
+
+.block-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.block-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.3rem 0;
+  border-top: 1px solid #efeff2;
+}
+
+.block-time {
+  font-size: 0.72rem;
+  color: #9b9ba0;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.6rem;
+}
+
+.block-label {
+  flex: 1;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.block-app {
+  color: #9b9ba0;
+  font-size: 0.78rem;
+}
+
+.block-dur {
+  font-size: 0.75rem;
+  color: #9b9ba0;
+  font-variant-numeric: tabular-nums;
+}
+
+.block-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  flex: none;
+}
+
+.block-cat {
+  border: 1px solid #d8d8dc;
+  border-radius: 8px;
+  padding: 0.2rem 0.35rem;
+  font-size: 0.78rem;
+  background: transparent;
+  color: inherit;
+}
+
 .cat-bar {
   display: flex;
   height: 26px;

@@ -448,6 +448,37 @@ pub fn set_session_category(
     Ok(())
 }
 
+/// Recategoriza manualmente um BLOCO inteiro: grava `category_ai` em todas as
+/// sessões daquele app no intervalo `[start_ts, until_ts)`. É a correção de
+/// 1 clique do usuário — quando a IA erra a categoria de um bloco, ele conserta
+/// e fica salvo (o categorizador só preenche linhas com category_ai NULL, então
+/// a correção não é sobrescrita depois). Retorna quantas linhas mudaram.
+pub fn set_block_category(
+    conn: &Connection,
+    app: &str,
+    start_ts: i64,
+    until_ts: i64,
+    category: &str,
+) -> rusqlite::Result<usize> {
+    // Categoria vazia = "automático": zera o override pra IA voltar a decidir.
+    if category.is_empty() {
+        return conn.execute(
+            "UPDATE focus_events
+             SET category_ai = NULL
+             WHERE app_id = (SELECT id FROM apps WHERE name = ?1)
+               AND start_ts >= ?2 AND start_ts < ?3",
+            params![app, start_ts, until_ts],
+        );
+    }
+    conn.execute(
+        "UPDATE focus_events
+         SET category_ai = ?4
+         WHERE app_id = (SELECT id FROM apps WHERE name = ?1)
+           AND start_ts >= ?2 AND start_ts < ?3",
+        params![app, start_ts, until_ts, category],
+    )
+}
+
 /// Últimas N sessões gravadas (mais recentes primeiro). Para debug/visualização.
 pub fn recent_sessions(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<FocusSession>> {
     let mut stmt = conn.prepare(
@@ -706,5 +737,44 @@ mod tests {
         assert_eq!(markers_in_range(&c, 300, 400).unwrap().len(), 0);
         // janela que cruza → 1
         assert_eq!(markers_in_range(&c, 150, 400).unwrap().len(), 1);
+    }
+
+    fn cat_of(c: &Connection, start: i64) -> Option<String> {
+        c.query_row(
+            "SELECT category_ai FROM focus_events WHERE start_ts = ?1",
+            params![start],
+            |r| r.get(0),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn block_recategorize_only_hits_its_window() {
+        let c = mem();
+        let opera = get_or_create_app(&c, "Opera", "com.opera").unwrap();
+        // Bloco A (Opera 0–120) e bloco B do MESMO app mais tarde (Opera 600–660).
+        insert_session(&c, opera, "a1", 0, 60, false, None).unwrap();
+        insert_session(&c, opera, "a2", 60, 120, false, None).unwrap();
+        insert_session(&c, opera, "b1", 600, 660, false, None).unwrap();
+
+        // Recategoriza só o bloco A: [0, 600).
+        let n = set_block_category(&c, "Opera", 0, 600, "Estudo").unwrap();
+        assert_eq!(n, 2); // só as duas filhas do bloco A
+
+        assert_eq!(cat_of(&c, 0).as_deref(), Some("Estudo"));
+        assert_eq!(cat_of(&c, 60).as_deref(), Some("Estudo"));
+        assert_eq!(cat_of(&c, 600), None); // bloco B intacto
+    }
+
+    #[test]
+    fn block_recategorize_empty_clears_to_auto() {
+        let c = mem();
+        let app = get_or_create_app(&c, "Code", "com.code").unwrap();
+        insert_session(&c, app, "x", 0, 60, false, None).unwrap();
+        set_block_category(&c, "Code", 0, 100, "Trabalho").unwrap();
+        assert_eq!(cat_of(&c, 0).as_deref(), Some("Trabalho"));
+        // "automático" (vazio) volta pra NULL → IA decide de novo.
+        set_block_category(&c, "Code", 0, 100, "").unwrap();
+        assert_eq!(cat_of(&c, 0), None);
     }
 }

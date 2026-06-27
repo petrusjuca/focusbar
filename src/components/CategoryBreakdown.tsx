@@ -2,20 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { AppTotal, CategoryTotal } from "../types";
 import { fmtDuration } from "../format";
-
-// Cores fixas por categoria (as desconhecidas caem em cinza).
-const CAT_COLORS: Record<string, string> = {
-  Trabalho: "#34c759",
-  Ferramenta: "#007aff",
-  Procrastinação: "#ff3b30",
-  Outro: "#8e8e93",
-};
-
-const CATEGORIES = ["Trabalho", "Ferramenta", "Procrastinação", "Outro"];
-
-function colorFor(cat: string): string {
-  return CAT_COLORS[cat] ?? "#8e8e93";
-}
+import { CATEGORIES, catColor as colorFor } from "../categories";
 
 export function CategoryBreakdown({
   data,
