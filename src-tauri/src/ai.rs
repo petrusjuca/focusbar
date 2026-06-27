@@ -248,27 +248,116 @@ pub async fn categorize_activity(
     title: &str,
     content: &str,
 ) -> Result<(String, String), String> {
+    // Categoria de partida pela REGRA (já sabe que qBittorrent/WhatsApp/Discord
+    // não são estudo). A IA só pode CONTRARIAR isso com prova no texto da tela.
+    let rule_cat = crate::category::categorize(app, title).to_string();
+
     let prompt = format!(
-        "Você classifica uma atividade de computador pelo CONTEÚDO da tela — NUNCA pelo \
-nome do app/site. Ex.: um vídeo de 'Cálculo 1 - derivadas' no YouTube é ESTUDO, não \
-distração; uma novela é DISTRAÇÃO.\n\
-Categorias (escolha UMA, exatamente): Trabalho, Estudo, Pessoal, Comunicação, Procrastinação.\n\
+        "Você classifica uma atividade de computador pelo CONTEÚDO REAL da tela.\n\
+REGRA DE OURO: só dê uma categoria se o TEXTO DA TELA mostrar do que se trata. Se \
+o texto for genérico (menu, lista, sem assunto) e não deixar claro o que a pessoa \
+fazia, responda CATEGORIA: INCERTO. NUNCA invente, NUNCA deduza pelo nome do app.\n\
+Ex.: vídeo 'Cálculo 1 - derivadas' → Estudo (o texto prova). \
+Tela genérica de um app qualquer → INCERTO.\n\
+Categorias possíveis: Trabalho, Estudo, Pessoal, Comunicação, Procrastinação, INCERTO.\n\
 App: {app}\n\
 Título: {title}\n\
 Texto na tela: \"{content}\"\n\n\
 Responda em DUAS linhas, em português:\n\
-CATEGORIA: <uma das cinco acima>\n\
-ATIVIDADE: <nome curto do que a pessoa fazia, 2 a 5 palavras, baseado no texto>"
+CATEGORIA: <uma das opções>\n\
+ATIVIDADE: <2 a 5 palavras COPIADAS do próprio texto; se INCERTO, escreva: -->"
     );
     let resp = generate(prompt).await?;
-    let cat_line = line_value(&resp, "categoria").unwrap_or_default();
-    let category = normalize_category(&cat_line).ok_or("categoria não reconhecida")?;
-    let activity: String = line_value(&resp, "atividade")
+
+    let raw_activity: String = line_value(&resp, "atividade")
         .unwrap_or_default()
         .trim()
         .trim_matches(|c: char| c == '"' || c == '\'')
         .chars()
         .take(60)
         .collect();
+    // Âncora: a atividade precisa ter ao menos uma palavra de verdade que de fato
+    // aparece no texto da tela. Sem isso, é provável invenção.
+    let grounded = activity_grounded(&raw_activity, content);
+
+    let cat_line = line_value(&resp, "categoria").unwrap_or_default();
+    let category = match normalize_category(&cat_line) {
+        Some(c) if c == rule_cat => c,   // concorda com a regra → confia
+        Some(c) if grounded => c,        // diverge MAS tem prova → confia (YouTube "Cálculo"→Estudo)
+        _ => rule_cat,                   // incerto, ou diverge sem prova → regra manda
+    };
+
+    // Atividade sem lastro vira vazia — melhor nada do que um rótulo inventado.
+    let activity = if grounded { raw_activity } else { String::new() };
     Ok((category, activity))
+}
+
+/// A atividade tem lastro no texto da tela? Verdadeira se alguma palavra
+/// significativa (>=4 letras) da atividade aparece no conteúdo (sem acento/caixa).
+fn activity_grounded(activity: &str, content: &str) -> bool {
+    let haystack = fold(content);
+    activity
+        .split(|c: char| !c.is_alphanumeric())
+        .map(fold)
+        .filter(|w| w.chars().count() >= 4)
+        .any(|w| haystack.contains(&w))
+}
+
+/// minúsculas + sem acento, pra casar texto de forma robusta.
+fn fold(s: &str) -> String {
+    s.chars()
+        .flat_map(|c| c.to_lowercase())
+        .map(|c| match c {
+            'á' | 'à' | 'â' | 'ã' | 'ä' => 'a',
+            'é' | 'è' | 'ê' | 'ë' => 'e',
+            'í' | 'ì' | 'î' | 'ï' => 'i',
+            'ó' | 'ò' | 'ô' | 'õ' | 'ö' => 'o',
+            'ú' | 'ù' | 'û' | 'ü' => 'u',
+            'ç' => 'c',
+            'ñ' => 'n',
+            other => other,
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn grounded_when_word_is_on_screen() {
+        // "Cálculo" aparece no texto → tem lastro (mesmo com acento/caixa).
+        assert!(activity_grounded(
+            "Estudando Cálculo",
+            "Curso de calculo 1 - derivadas e limites"
+        ));
+    }
+
+    #[test]
+    fn not_grounded_when_invented() {
+        // O modelo inventou "Verificar uso de memória" mas nada disso está na tela.
+        assert!(!activity_grounded(
+            "Verificar uso de memória",
+            "Conversa no app, mensagens trocadas hoje"
+        ));
+    }
+
+    #[test]
+    fn short_words_dont_count_as_evidence() {
+        // Só palavras curtas em comum (<4 letras) não bastam como prova.
+        assert!(!activity_grounded("ver os pdf", "ABC de la os um"));
+    }
+
+    #[test]
+    fn empty_activity_is_not_grounded() {
+        assert!(!activity_grounded("", "qualquer texto na tela aqui"));
+        assert!(!activity_grounded("--", "qualquer texto na tela aqui"));
+    }
+
+    #[test]
+    fn normalize_maps_incerto_to_none() {
+        // "INCERTO" não é categoria válida → cai pra regra no chamador.
+        assert!(normalize_category("INCERTO").is_none());
+        assert_eq!(normalize_category("Estudo").as_deref(), Some("Estudo"));
+    }
 }
