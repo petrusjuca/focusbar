@@ -77,21 +77,25 @@ export function MiniView({
   }, []);
 
   // Inicia um bloco de 25min num clique (definindo o foco se veio de uma tarefa).
-  async function startBlock(goal: string) {
-    if (goal && goal !== focus) {
+  async function startBlock(g: string) {
+    if (g && g !== focus) {
       try {
-        await invoke("set_focus", { text: goal });
-        setFocus(goal);
+        await invoke("set_focus", { text: g });
+        setFocus(g);
       } catch {
         /* ignore */
       }
     }
-    session.start(25, goal || focus);
+    session.start(25 * 60, g || focus);
   }
 
   const onTask = check?.on_task;
-  const running = session.phase !== "idle";
-  const isBreak = session.phase === "break";
+  const phase = session.phase;
+  const running = phase !== "idle";
+  const isFocus = phase === "focus";
+  const isOver = phase === "overtime";
+  const isBreak = phase === "break";
+  const isBreakOver = phase === "break_over";
 
   // Tom (cor do ponto de status) + a direção (uma frase calma, sem culpa).
   let tone = "idle";
@@ -99,13 +103,19 @@ export function MiniView({
   if (paused) {
     tone = "paused";
     dir = "Monitoramento pausado";
+  } else if (isOver) {
+    tone = "good";
+    dir = "Tempo cumprido — pausar?";
+  } else if (isBreakOver) {
+    tone = "break";
+    dir = "Bora pro próximo?";
   } else if (isBreak) {
     tone = "break";
     dir = "Pausa — respira um pouco";
-  } else if (running && session.blockPaused) {
+  } else if (isFocus && session.blockPaused) {
     tone = "paused";
     dir = "Bloco pausado";
-  } else if (running) {
+  } else if (isFocus) {
     tone = onTask === false ? "warn" : "good";
     dir = onTask === false ? "Vamos voltar ao foco?" : "Em foco";
   } else if (session.pomodoros > 0) {
@@ -115,6 +125,28 @@ export function MiniView({
     tone = "idle";
     dir = open.length ? "Escolha por onde começar" : "Vamos começar pequeno";
   }
+
+  // Ações do timer conforme a fase (no máx. 2, pra não poluir o card).
+  const clock = isOver || isBreakOver ? `+${fmtClock(session.over)}` : fmtClock(session.remaining);
+  const timerActions: { label: string; on: () => void }[] = isFocus
+    ? [
+        { label: session.blockPaused ? "retomar" : "pausar", on: session.toggleBlock },
+        { label: "terminei", on: session.finishTask },
+      ]
+    : isOver
+      ? [
+          { label: "iniciar pausa", on: session.startBreak },
+          { label: "terminei", on: session.finishTask },
+        ]
+      : isBreak
+        ? [
+            { label: "próximo", on: () => session.startNext() },
+            { label: "pular", on: session.skipBreak },
+          ]
+        : [
+            { label: "próximo", on: () => session.startNext() },
+            { label: "encerrar", on: session.skipBreak },
+          ];
 
   // Ajusta a janela à altura do conteúdo — nada de vão vazio.
   useLayoutEffect(() => {
@@ -154,20 +186,21 @@ export function MiniView({
 
         {running ? (
           <div className="agent-timer">
-            <div className="agent-clock">{fmtClock(session.remaining)}</div>
-            {!isBreak && focus && (
+            <div className="agent-clock">{clock}</div>
+            {(isFocus || isOver) && focus && (
               <div className="agent-focus" title={focus}>
                 {focus}
               </div>
             )}
             <div className="agent-timer-ctrl">
-              <button className="agent-link" onClick={session.toggleBlock}>
-                {session.blockPaused ? "retomar" : "pausar"}
-              </button>
-              <span className="agent-sep">·</span>
-              <button className="agent-link" onClick={session.stop}>
-                {isBreak ? "pular" : "parar"}
-              </button>
+              {timerActions.map((a, i) => (
+                <span key={a.label}>
+                  {i > 0 && <span className="agent-sep">·</span>}
+                  <button className="agent-link" onClick={a.on}>
+                    {a.label}
+                  </button>
+                </span>
+              ))}
             </div>
           </div>
         ) : open.length === 0 ? (

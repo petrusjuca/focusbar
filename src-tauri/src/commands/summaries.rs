@@ -1,7 +1,9 @@
 use crate::category::{categorize, effective};
 use crate::db;
 use crate::insights::day_insights;
-use crate::models::{CategoryTotal, DailySummary, DayTotal, FocusSession, Insight, WeeklySummary};
+use crate::models::{
+    CategoryTotal, DailySummary, DayTotal, FocusSession, Insight, IntervalMarker, WeeklySummary,
+};
 use crate::state::AppState;
 use chrono::{Duration, Local, LocalResult, NaiveDate, TimeZone};
 use std::collections::HashMap;
@@ -80,7 +82,22 @@ pub fn get_day_sessions(
 ) -> Result<Vec<FocusSession>, String> {
     let (start, end, _) = bounds_for_date(parse_day(day.as_deref()));
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    db::sessions_in_range(&conn, start, end).map_err(|e| e.to_string())
+    let raw = db::sessions_in_range(&conn, start, end).map_err(|e| e.to_string())?;
+    // Agrupa o "confete" em atividades reais (mesma app, gaps <= 90s). Só na
+    // exibição — o dado bruto fica intacto no banco.
+    Ok(db::group_sessions(&raw, db::GROUP_GAP_SECS))
+}
+
+/// Marcadores de intervalo do dia (pausado / ausente) — pra timeline rotular
+/// cada minuto (o "sem dados" é derivado no frontend pelos buracos restantes).
+#[tauri::command]
+pub fn get_day_markers(
+    state: State<AppState>,
+    day: Option<String>,
+) -> Result<Vec<IntervalMarker>, String> {
+    let (start, end, _) = bounds_for_date(parse_day(day.as_deref()));
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::markers_in_range(&conn, start, end).map_err(|e| e.to_string())
 }
 
 /// Tempo por categoria (Trabalho / Ferramenta / Procrastinação / Outro) num dia.

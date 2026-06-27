@@ -9,14 +9,12 @@ import type {
   DailySummary,
   FocusSession,
   Insight,
-  TaskRule,
-  TaskTotal,
+  IntervalMarker,
   WeeklySummary,
 } from "./types";
 import { fmtClock, fmtDuration, fmtTime, friendlyError } from "./format";
 import { FocusTimeline } from "./components/FocusTimeline";
 import { CategoryBreakdown } from "./components/CategoryBreakdown";
-import { TaskBreakdown } from "./components/TaskBreakdown";
 import { InsightsPanel } from "./components/InsightsPanel";
 import { RemindersView } from "./components/RemindersView";
 import { AssistantView } from "./components/AssistantView";
@@ -49,9 +47,8 @@ function App() {
   const [summary, setSummary] = useState<DailySummary | null>(null);
   const [weekly, setWeekly] = useState<WeeklySummary | null>(null);
   const [daySessions, setDaySessions] = useState<FocusSession[]>([]);
+  const [dayMarkers, setDayMarkers] = useState<IntervalMarker[]>([]);
   const [categories, setCategories] = useState<CategoryTotal[]>([]);
-  const [tasks, setTasks] = useState<TaskTotal[]>([]);
-  const [taskRules, setTaskRules] = useState<TaskRule[]>([]);
   const [dayInsights, setDayInsights] = useState<Insight[]>([]);
   const [sessions, setSessions] = useState<FocusSession[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +69,7 @@ function App() {
     } catch (e) {
       setError(friendlyError(e));
     }
-    session.start(25, text);
+    session.start(25 * 60, text);
     setTab("hoje");
   }
 
@@ -117,26 +114,26 @@ function App() {
     // no evento focus-changed (fim de sessão) + uma rede de segurança a cada 20s.
     async function loadData() {
       try {
-        const [daily, week, dayS, cats, tsum, trules, tips, recent] =
+        const [daily, week, dayS, cats, tips, recent, marks] =
           await Promise.all([
             invoke<DailySummary>("get_daily_summary", { day: null }),
             invoke<WeeklySummary>("get_weekly_summary", { endDay: null }),
             invoke<FocusSession[]>("get_day_sessions", { day: null }),
             invoke<CategoryTotal[]>("get_category_summary", { day: null }),
-            invoke<TaskTotal[]>("get_task_summary", { day: null }),
-            invoke<TaskRule[]>("list_task_rules"),
             invoke<Insight[]>("get_day_insights", { day: null }),
             invoke<FocusSession[]>("get_recent_sessions", { limit: 25 }),
+            invoke<IntervalMarker[]>("get_day_markers", { day: null }).catch(
+              () => [] as IntervalMarker[]
+            ),
           ]);
         if (alive) {
           setSummary(daily);
           setWeekly(week);
           setDaySessions(dayS);
           setCategories(cats);
-          setTasks(tsum);
-          setTaskRules(trules);
           setDayInsights(tips);
           setSessions(recent);
+          setDayMarkers(marks);
           setError(null);
           setLoaded(true);
         }
@@ -150,12 +147,18 @@ function App() {
     const lightId = setInterval(pollLight, 1500);
     const heavyId = setInterval(loadData, 20000); // rede de segurança
     const unlisten = listen("focus-changed", () => loadData());
+    // Pausa/retoma (vindo do app OU da bandeja) reflete na hora no banner.
+    const unlistenPause = listen<boolean>("paused-changed", (e) => {
+      setPaused(e.payload);
+      loadData();
+    });
 
     return () => {
       alive = false;
       clearInterval(lightId);
       clearInterval(heavyId);
       unlisten.then((un) => un());
+      unlistenPause.then((un) => un());
     };
   }, []);
 
@@ -237,15 +240,6 @@ function App() {
     }
   }
 
-  async function reloadTasks() {
-    const [tsum, trules] = await Promise.all([
-      invoke<TaskTotal[]>("get_task_summary", { day: null }),
-      invoke<TaskRule[]>("list_task_rules"),
-    ]);
-    setTasks(tsum);
-    setTaskRules(trules);
-  }
-
   if (mini) {
     return (
       <MiniView
@@ -259,6 +253,12 @@ function App() {
 
   return (
     <main className="container">
+      {paused && (
+        <div className="pause-banner" role="status">
+          ⏸ Monitoramento pausado — nada está sendo registrado.
+          <button onClick={togglePause}>Retomar</button>
+        </div>
+      )}
       <h1 className="brand-compact">focusbar</h1>
 
       <button className="agent-cta" onClick={enterMini}>
@@ -267,33 +267,81 @@ function App() {
       </button>
       <SelfCheck />
 
-      {session.phase !== "idle" && (
-        <div
-          className={`run-strip ${session.phase === "break" ? "brk" : "foc"}${
-            session.blockPaused ? " frozen" : ""
-          }`}
-        >
-          <span className="run-clock">
-            {session.blockPaused
-              ? "⏸"
-              : session.phase === "break"
+      {session.phase !== "idle" &&
+        (() => {
+          const p = session.phase;
+          const isBrk = p === "break" || p === "break_over";
+          const counting = p === "overtime" || p === "break_over";
+          const icon = session.blockPaused
+            ? "⏸"
+            : p === "overtime"
+              ? "✅"
+              : isBrk
                 ? "☕"
-                : "🟢"}{" "}
-            {fmtClock(session.remaining)}
-          </span>
-          {session.phase === "focus" && session.goal && (
-            <span className="run-goal" title={session.goal}>
-              🎯 {session.goal}
-            </span>
-          )}
-          <button className="link-btn" onClick={session.toggleBlock}>
-            {session.blockPaused ? "retomar" : "pausar"}
-          </button>
-          <button className="link-btn" onClick={session.stop}>
-            {session.phase === "break" ? "pular" : "parar"}
-          </button>
-        </div>
-      )}
+                : "🟢";
+          const clock = counting
+            ? `+${fmtClock(session.over)}`
+            : fmtClock(session.remaining);
+          return (
+            <div
+              className={`run-strip ${isBrk ? "brk" : "foc"}${
+                session.blockPaused ? " frozen" : ""
+              }`}
+            >
+              <span className="run-clock">
+                {icon} {clock}
+              </span>
+              {(p === "focus" || p === "overtime") && session.goal && (
+                <span className="run-goal" title={session.goal}>
+                  🎯 {session.goal}
+                </span>
+              )}
+              {p === "focus" && (
+                <>
+                  <button className="link-btn" onClick={session.toggleBlock}>
+                    {session.blockPaused ? "retomar" : "pausar"}
+                  </button>
+                  <button className="link-btn" onClick={session.finishTask}>
+                    ✓ terminei
+                  </button>
+                  <button className="link-btn" onClick={session.stop}>
+                    parar
+                  </button>
+                </>
+              )}
+              {p === "overtime" && (
+                <>
+                  <button className="link-btn" onClick={session.startBreak}>
+                    ☕ pausa
+                  </button>
+                  <button className="link-btn" onClick={session.finishTask}>
+                    ✓ terminei
+                  </button>
+                </>
+              )}
+              {p === "break" && (
+                <>
+                  <button className="link-btn" onClick={() => session.startNext()}>
+                    próximo
+                  </button>
+                  <button className="link-btn" onClick={session.skipBreak}>
+                    pular
+                  </button>
+                </>
+              )}
+              {p === "break_over" && (
+                <>
+                  <button className="link-btn" onClick={() => session.startNext()}>
+                    ▶ próximo
+                  </button>
+                  <button className="link-btn" onClick={session.skipBreak}>
+                    encerrar
+                  </button>
+                </>
+              )}
+            </div>
+          );
+        })()}
 
       <button
         className={paused ? "pause-btn paused" : "pause-btn"}
@@ -412,8 +460,7 @@ function App() {
                 </Suspense>
               )}
               <CategoryBreakdown data={categories} apps={summary?.by_app ?? []} />
-              <TaskBreakdown data={tasks} rules={taskRules} onChange={reloadTasks} />
-              <FocusTimeline sessions={daySessions} />
+              <FocusTimeline sessions={daySessions} markers={dayMarkers} />
 
               <div className="sessions">
             <div className="sessions-header">
@@ -478,9 +525,6 @@ function App() {
       )}
 
       <footer className="footer">
-        <button className="mini-toggle" onClick={enterMini}>
-          ⤡ Janela pequena (fica no canto da tela)
-        </button>
         <button
           className="mini-toggle"
           onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}

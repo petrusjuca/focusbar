@@ -171,6 +171,46 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
         });
     }
 
+    // CACHE: enquanto a janela em foco (foco|app|título) não muda, reusa o último
+    // veredito por até 120s — NÃO relê AX/OCR nem reaciona o Ollama. É o que evita
+    // o modelo ficar "quente" pra sempre batendo a cada 30s (bateria/ventilador).
+    let now = now_ts();
+    let key = format!("{}\u{1}{}\u{1}{}", focus, app, title);
+    if let Ok(c) = state.last_check.lock() {
+        if let Some(cc) = c.as_ref() {
+            if cc.key == key && now - cc.ts < 120 {
+                return Ok(FocusCheck {
+                    focus: Some(cc.focus.clone()),
+                    app: Some(cc.app.clone()),
+                    on_task: cc.on_task,
+                    reason: cc.reason.clone(),
+                    source: cc.source.clone(),
+                });
+            }
+        }
+    }
+    // Constrói o FocusCheck E grava no cache (usado em todos os retornos pesados).
+    let store = |on_task: Option<bool>, reason: String, source: &str| -> FocusCheck {
+        if let Ok(mut c) = state.last_check.lock() {
+            *c = Some(crate::state::CachedCheck {
+                key: key.clone(),
+                focus: focus.clone(),
+                app: app.clone(),
+                on_task,
+                reason: reason.clone(),
+                source: source.to_string(),
+                ts: now,
+            });
+        }
+        FocusCheck {
+            focus: Some(focus.clone()),
+            app: Some(app.clone()),
+            on_task,
+            reason,
+            source: source.to_string(),
+        }
+    };
+
     // "Olhos" Estágio 1: lê o texto visível da janela pela Acessibilidade (sem
     // screenshot), passa pelo porteiro, e dá esse contexto pra IA julgar melhor.
     let mut extra = crate::capture::focused_text(pid)
@@ -195,13 +235,7 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
     {
         let hay = fold(&format!("{} {} {}", app, title, extra));
         if let Some(kw) = focus_keyword_in(&focus, &hay) {
-            return Ok(FocusCheck {
-                focus: Some(focus),
-                app: Some(app),
-                on_task: Some(true),
-                reason: format!("Bate com seu foco (\"{}\").", kw),
-                source: "match".into(),
-            });
+            return Ok(store(Some(true), format!("Bate com seu foco (\"{}\").", kw), "match"));
         }
     }
 
@@ -215,13 +249,7 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
             && ev.to_lowercase() != "nada"
             && fold(&format!("{} {}", title, extra)).contains(&fold(ev));
         if grounded {
-            return Ok(FocusCheck {
-                focus: Some(focus),
-                app: Some(app),
-                on_task: Some(j.on_task),
-                reason: format!("Vi na tela: \"{}\".", ev),
-                source: "ia".into(),
-            });
+            return Ok(store(Some(j.on_task), format!("Vi na tela: \"{}\".", ev), "ia"));
         }
         // Sem prova verificável → a IA não ancorou. Ignora e segue pro fallback.
     }
@@ -229,13 +257,11 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
     // 3) Sem Ollama: antes da regra burra, reaproveita o texto que JÁ lemos
     //    (OCR/AX) — se o conteúdo cita o foco, é um palpite informado de "no foco".
     if let Some(kw) = focus_keyword_in(&focus, &fold(&extra)) {
-        return Ok(FocusCheck {
-            focus: Some(focus),
-            app: Some(app),
-            on_task: Some(true),
-            reason: format!("O conteúdo mostra \"{}\" (sem Ollama, é um palpite).", kw),
-            source: "match".into(),
-        });
+        return Ok(store(
+            Some(true),
+            format!("O conteúdo mostra \"{}\" (sem Ollama, é um palpite).", kw),
+            "match",
+        ));
     }
 
     // 4) Último recurso: regra pela categoria do app (estimativa honesta).
@@ -251,13 +277,7 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
             app
         )
     };
-    Ok(FocusCheck {
-        focus: Some(focus),
-        app: Some(app),
-        on_task: Some(on_task),
-        reason,
-        source: "rule".into(),
-    })
+    Ok(store(Some(on_task), reason, "rule"))
 }
 
 /// Correção do usuário: para o foco atual, marca o app como útil ou distração.

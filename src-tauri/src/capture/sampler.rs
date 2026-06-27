@@ -6,7 +6,7 @@
 //! - Pause: quando `paused`, não conta nada (sem ser procrastinação).
 //! - Idle: sem input por IDLE_THRESHOLD_SECS fecha no último input.
 
-use crate::capture::{browser, ActiveWinProvider, WindowProvider};
+use crate::capture::{browser, signals, state, ActiveWinProvider, WindowProvider};
 use crate::coach::Coach;
 use crate::db;
 use rusqlite::Connection;
@@ -77,12 +77,35 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
         let provider = ActiveWinProvider;
         let mut current: Option<OpenSession> = None;
         let mut coach = Coach::new();
+        let mut prev_state = state::TickState::Active;
 
         loop {
             let now = now_ts();
             let idle = idle_secs();
             let is_idle = idle >= IDLE_THRESHOLD_SECS;
             let is_paused = paused.load(Ordering::Relaxed);
+
+            // Motor de presença: classifica o tick (ativo/passivo/ocioso/ausente)
+            // e abre/fecha marcadores de AUSÊNCIA na transição — pra timeline ter
+            // dono em todo minuto. (Pausa é tratada no set_paused, não aqui.)
+            let st = state::resolve_state(idle, signals::audio_active(), signals::locked(), is_paused);
+            if st != prev_state {
+                let prev_kind = prev_state.marker_kind();
+                let new_kind = st.marker_kind();
+                if prev_kind != new_kind {
+                    if let Ok(conn) = db.lock() {
+                        if let Some(k) = prev_kind {
+                            let _ = db::close_marker(&conn, k, now);
+                        }
+                        if let Some(k) = new_kind {
+                            // Recua ao momento aproximado em que saiu (último input).
+                            let _ = db::open_marker(&conn, k, (now - idle).max(0));
+                        }
+                    }
+                }
+                let _ = app.emit("state-changed", st.as_str());
+                prev_state = st;
+            }
 
             // Pausado ou ocioso = sem foco (mas pausado NÃO é idle-trimmed).
             // Ignora "loginwindow" e cia. — tela de bloqueio não é foco real.
@@ -124,7 +147,7 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
                     let url = browser::browser_url(&w.app_name);
                     let (label_app, stored_title, bundle) = match &url {
                         Some(u) => (
-                            browser::site_name(u).unwrap_or_else(|| w.app_name.clone()),
+                            browser::site_label(u).unwrap_or_else(|| w.app_name.clone()),
                             // URL limpa: sem query/fragment (onde vivem tokens/PII).
                             format!("{} — {}", w.title, browser::clean_url(u)),
                             String::new(), // site agrupa independente do navegador

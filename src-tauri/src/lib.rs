@@ -19,11 +19,13 @@ use commands::assistant::{
     ai_available, ai_day_digest, ai_day_review, ai_pull_model, ai_status, start_ollama,
 };
 use commands::config::{
-    get_focus_time, get_ocr_enabled, log_focus_time, set_ocr_enabled,
+    get_focus_time, get_ocr_enabled, log_focus_time, log_pomodoro, set_ocr_enabled,
 };
 use commands::focus::{check_focus, get_focus, set_focus, set_focus_judgment};
 use commands::notes::{add_note, delete_note, list_notes};
-use commands::todos::{add_todo, delete_todo, list_todos, toggle_todo};
+use commands::todos::{
+    add_todo, complete_todo_by_text, delete_todo, list_todos, toggle_todo,
+};
 use commands::permissions::{
     check_accessibility, check_screen_recording, request_accessibility, request_screen_recording,
 };
@@ -32,11 +34,8 @@ use commands::reminders::{
 };
 use commands::sessions::{delete_app_sessions, delete_session, get_recent_sessions};
 use commands::summaries::{
-    get_category_summary, get_daily_summary, get_day_insights, get_day_sessions,
+    get_category_summary, get_daily_summary, get_day_insights, get_day_markers, get_day_sessions,
     get_weekly_summary, set_app_category,
-};
-use commands::tasks::{
-    create_task_rule, delete_task_rule, get_current_task, get_task_summary, list_task_rules,
 };
 use models::ActiveWindow;
 use state::AppState;
@@ -44,7 +43,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::menu::{Menu, MenuItem};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Manager, State, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_autostart::{ManagerExt, MacosLauncher};
 
 /// Lê a janela/app atualmente em foco. Chamado pelo frontend a cada ~1s.
@@ -73,10 +72,32 @@ fn get_paused(state: State<AppState>) -> bool {
     state.paused.load(Ordering::Relaxed)
 }
 
-/// Pausa/retoma o rastreamento (pausado = não conta nada).
+fn now_ts() -> i64 {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+/// Pausa/retoma o rastreamento (pausado = não conta nada). Grava um marcador de
+/// intervalo "paused" pra timeline mostrar uma faixa rotulada (nunca vazio), e
+/// emite `paused-changed` pro banner/bandeja virarem na hora.
 #[tauri::command]
-fn set_paused(state: State<AppState>, paused: bool) {
-    state.paused.store(paused, Ordering::Relaxed);
+fn set_paused(app: AppHandle, state: State<AppState>, paused: bool) {
+    let prev = state.paused.swap(paused, Ordering::Relaxed);
+    if prev == paused {
+        return;
+    }
+    let now = now_ts();
+    if let Ok(conn) = state.db.lock() {
+        if paused {
+            let _ = db::open_marker(&conn, "paused", now);
+        } else {
+            let _ = db::close_marker(&conn, "paused", now);
+        }
+    }
+    let _ = app.emit("paused-changed", paused);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -98,12 +119,18 @@ pub fn run() {
             std::fs::create_dir_all(&dir).ok();
             let db_path = dir.join("focusbar.db");
             let conn = db::open(&db_path).expect("falha ao abrir o banco");
+            // Cura marcadores deixados ABERTOS por um crash/forçar-saída (senão a
+            // timeline mostraria "pausado/ausente" pra sempre).
+            let _ = db::close_marker(&conn, "paused", now_ts());
+            let _ = db::close_marker(&conn, "away", now_ts());
+            let _ = db::close_marker(&conn, "away_uncertain", now_ts());
             let db = Arc::new(Mutex::new(conn));
             let paused = Arc::new(AtomicBool::new(false));
 
             app.manage(AppState {
                 db: db.clone(),
                 paused: paused.clone(),
+                last_check: std::sync::Mutex::new(None),
             });
 
             // Tenta ligar o Ollama sozinho (best-effort; se não tiver, ignora).
@@ -131,8 +158,20 @@ pub fn run() {
                     }
                     "pause" => {
                         let st = app.state::<AppState>();
-                        let now = st.paused.load(Ordering::Relaxed);
-                        st.paused.store(!now, Ordering::Relaxed);
+                        let prev = st.paused.load(Ordering::Relaxed);
+                        let next = !prev;
+                        st.paused.store(next, Ordering::Relaxed);
+                        // Mesmo marcador/evento do set_paused (senão a pausa pela
+                        // bandeja fica invisível na timeline e no banner).
+                        let now = now_ts();
+                        if let Ok(conn) = st.db.lock() {
+                            if next {
+                                let _ = db::open_marker(&conn, "paused", now);
+                            } else {
+                                let _ = db::close_marker(&conn, "paused", now);
+                            }
+                        }
+                        let _ = app.emit("paused-changed", next);
                     }
                     "quit" => app.exit(0),
                     _ => {}
@@ -159,6 +198,7 @@ pub fn run() {
             delete_app_sessions,
             get_daily_summary,
             get_day_sessions,
+            get_day_markers,
             get_weekly_summary,
             get_category_summary,
             list_reminders,
@@ -170,11 +210,6 @@ pub fn run() {
             get_paused,
             set_paused,
             get_day_insights,
-            list_task_rules,
-            create_task_rule,
-            delete_task_rule,
-            get_current_task,
-            get_task_summary,
             ai_available,
             ai_day_review,
             ai_day_digest,
@@ -189,6 +224,7 @@ pub fn run() {
             list_todos,
             toggle_todo,
             delete_todo,
+            complete_todo_by_text,
             set_focus,
             get_focus,
             check_focus,
@@ -196,6 +232,7 @@ pub fn run() {
             get_ocr_enabled,
             set_ocr_enabled,
             log_focus_time,
+            log_pomodoro,
             get_focus_time
         ])
         .run(tauri::generate_context!())

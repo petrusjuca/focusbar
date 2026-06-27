@@ -58,7 +58,8 @@ fn patterns() -> &'static Vec<Regex> {
             r"\beyJ[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+\b",
             // tokens/segredos longos (chaves de API, etc.)
             r"\b(?:sk|pk|ghp|gho|xox[bp])[-_][A-Za-z0-9_\-]{12,}\b",
-            r"\b[A-Za-z0-9_\-]{32,}\b",
+            // (sequências longas alfanuméricas são tratadas em `redact` — só
+            //  redige as que MISTURAM letra+dígito, pra não apagar slug/palavra.)
             // linhas com "senha"/"password" seguidas de algo
             r"(?i)(senha|password|passwd|pwd)\s*[:=]\s*\S+",
             // caminhos Windows: UNC (\\servidor\share\...) e absoluto com ao menos
@@ -77,6 +78,12 @@ fn url_tail() -> &'static Regex {
     URL_TAIL.get_or_init(|| Regex::new(r"(https?://[^\s?#]+)[?#]\S*").unwrap())
 }
 
+/// Sequência longa (>=32) de [A-Za-z0-9_] — candidata a token/chave/hash.
+fn long_token() -> &'static Regex {
+    static R: OnceLock<Regex> = OnceLock::new();
+    R.get_or_init(|| Regex::new(r"\b[A-Za-z0-9_]{32,}\b").unwrap())
+}
+
 /// Redige conteúdo sensível, trocando por [REDIGIDO].
 pub fn redact(input: &str) -> String {
     // 1) Tira query/fragment de qualquer URL (tokens/PII vivem no ?...#...).
@@ -86,6 +93,21 @@ pub fn redact(input: &str) -> String {
     for re in patterns() {
         out = re.replace_all(&out, "[REDIGIDO]").into_owned();
     }
+    // 3) Sequências longas: só redige as que MISTURAM letra E dígito (cara de
+    //    chave/hash). Um slug de URL ou palavra comprida (só letras) é preservado
+    //    — corrige a "super-redação" que apagava texto legítimo.
+    out = long_token()
+        .replace_all(&out, |c: &regex::Captures| {
+            let m = &c[0];
+            let has_digit = m.bytes().any(|b| b.is_ascii_digit());
+            let has_alpha = m.bytes().any(|b| b.is_ascii_alphabetic());
+            if has_digit && has_alpha {
+                "[REDIGIDO]".to_string()
+            } else {
+                m.to_string()
+            }
+        })
+        .into_owned();
     out
 }
 
@@ -125,6 +147,16 @@ mod tests {
         let out = redact("contato: joao.silva@empresa.com.br aqui");
         assert!(out.contains("[REDIGIDO]"));
         assert!(!out.contains("joao.silva@empresa.com.br"));
+    }
+
+    #[test]
+    fn long_slug_preserved_but_mixed_token_redacted() {
+        // slug comprido só com letras/hífen NÃO é apagado (corrige super-redação)
+        let slug = "como-instalar-suporte-de-parede-para-roteador-modem";
+        assert_eq!(redact(slug), slug);
+        // mas um hash/chave (letra + dígito, 32+) ainda é redigido
+        let out = redact("commit a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0 feito");
+        assert!(out.contains("[REDIGIDO]"));
     }
 
     #[test]

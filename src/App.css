@@ -790,6 +790,96 @@ h1 {
   border-radius: 2px;
 }
 
+/* Faixas de "gap": cada minuto tem dono (pausado / ausente / sem-dados). O
+   fundo cinza do .ribbon já representa "sem dados"; os marcadores pintam por cima. */
+.ribbon-gap {
+  position: absolute;
+  top: 0;
+  height: 100%;
+}
+.gap-paused {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(120, 120, 130, 0.55),
+    rgba(120, 120, 130, 0.55) 4px,
+    rgba(120, 120, 130, 0.3) 4px,
+    rgba(120, 120, 130, 0.3) 8px
+  );
+}
+.gap-away {
+  background: rgba(245, 158, 11, 0.35);
+}
+.gap-away_uncertain {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(245, 158, 11, 0.4),
+    rgba(245, 158, 11, 0.4) 4px,
+    rgba(245, 158, 11, 0.12) 4px,
+    rgba(245, 158, 11, 0.12) 8px
+  );
+}
+.ribbon-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 0.45rem;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+.ribbon-legend .lg {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  margin-right: 0.3rem;
+  vertical-align: middle;
+}
+.lg-work {
+  background: #34c759;
+}
+.lg-paused {
+  background: repeating-linear-gradient(
+    45deg,
+    rgba(120, 120, 130, 0.7),
+    rgba(120, 120, 130, 0.7) 3px,
+    rgba(120, 120, 130, 0.3) 3px,
+    rgba(120, 120, 130, 0.3) 6px
+  );
+}
+.lg-away {
+  background: rgba(245, 158, 11, 0.6);
+}
+.lg-nodata {
+  background: #ececef;
+  border: 1px solid var(--border);
+}
+
+/* Banner persistente de pausa — o estado "off" nunca pode ser invisível (TDAH). */
+.pause-banner {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.7rem;
+  margin: -2.5rem -1.5rem 1.2rem;
+  padding: 0.6rem 1rem;
+  background: #f59e0b;
+  color: #2a1a00;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.pause-banner button {
+  background: #2a1a00;
+  color: #f59e0b;
+  border: none;
+  border-radius: 7px;
+  padding: 0.28rem 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
 .week-apps {
   margin-top: 0.9rem;
 }
@@ -1685,6 +1775,11 @@ html[data-theme="light"] .mini-icon:hover {
 }
 .session-card.running.brk .session-clock {
   color: var(--warn);
+}
+.session-hint {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin: -0.2rem 0 0.5rem;
 }
 
 /* Cronômetro no mini widget */

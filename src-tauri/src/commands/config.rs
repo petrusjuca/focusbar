@@ -21,6 +21,29 @@ pub fn log_focus_time(state: State<AppState>, goal: String, secs: i64) -> Result
     db::log_focus_time(&conn, goal.trim(), secs, now_ts()).map_err(|e| e.to_string())
 }
 
+/// Registra um bloco Pomodoro concluído (goal, planejado, real, se concluiu).
+#[tauri::command]
+pub fn log_pomodoro(
+    state: State<AppState>,
+    goal: String,
+    start_ts: i64,
+    planned_secs: i64,
+    actual_secs: i64,
+    completed: bool,
+) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::log_pomodoro(
+        &conn,
+        goal.trim(),
+        start_ts,
+        planned_secs,
+        actual_secs,
+        completed,
+        now_ts(),
+    )
+    .map_err(|e| e.to_string())
+}
+
 /// Tempo dedicado por objetivo/tarefa no dia (pra "direcionar o dia pelo foco").
 #[tauri::command]
 pub fn get_focus_time(

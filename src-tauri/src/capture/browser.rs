@@ -129,9 +129,82 @@ pub fn site_name(url: &str) -> Option<String> {
     Some(nice.to_string())
 }
 
+/// Host + 1º segmento do caminho de uma URL (ambos minúsculos).
+fn host_and_first_seg(url: &str) -> (String, String) {
+    let after = url.split("://").nth(1).unwrap_or(url);
+    let mut parts = after.splitn(2, '/');
+    let host = parts
+        .next()
+        .unwrap_or("")
+        .split(['?', ':'])
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    let seg = parts
+        .next()
+        .unwrap_or("")
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .to_lowercase();
+    (host, seg)
+}
+
+/// Pra domínios onde o nome-base esconde apps distintos (Claude chat × cowork ×
+/// console), descobre a "superfície" pelo subdomínio/caminho.
+fn claude_surface(url: &str) -> String {
+    let (host, seg) = host_and_first_seg(url);
+    if host.starts_with("console.") {
+        return "console".into();
+    }
+    if host.starts_with("cowork.") {
+        return "cowork".into();
+    }
+    match seg.as_str() {
+        "" | "chat" | "chats" | "new" | "recents" => "chat".into(),
+        "cowork" => "cowork".into(),
+        "code" => "code".into(),
+        "projects" | "project" => "projetos".into(),
+        other => other.to_string(),
+    }
+}
+
+/// Rótulo do site PRO DASHBOARD — como `site_name`, mas diferencia sub-apps do
+/// mesmo domínio que senão colapsariam (ex.: os "2 Claudes" → "Claude (chat)"
+/// vs "Claude (cowork)" vs "Claude (console)"). É o que o sampler usa.
+pub fn site_label(url: &str) -> Option<String> {
+    let base = site_name(url)?;
+    if base == "Claude" {
+        return Some(format!("Claude ({})", claude_surface(url)));
+    }
+    Some(base)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diferencia_os_dois_claudes() {
+        assert_eq!(
+            site_label("https://claude.ai/chat/abc").as_deref(),
+            Some("Claude (chat)")
+        );
+        assert_eq!(site_label("https://claude.ai/").as_deref(), Some("Claude (chat)"));
+        assert_eq!(
+            site_label("https://cowork.anthropic.com/x").as_deref(),
+            Some("Claude (cowork)")
+        );
+        assert_eq!(
+            site_label("https://console.anthropic.com/").as_deref(),
+            Some("Claude (console)")
+        );
+        // sites normais passam igual
+        assert_eq!(
+            site_label("https://www.youtube.com/watch?v=a").as_deref(),
+            Some("YouTube")
+        );
+    }
 
     #[test]
     fn maps_known_sites() {

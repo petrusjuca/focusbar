@@ -17,6 +17,14 @@ export interface FocusSession {
   was_idle_trimmed: boolean;
 }
 
+// Intervalo de ausência de dado real (todo minuto com dono na timeline).
+export interface IntervalMarker {
+  id: number;
+  kind: "paused" | "away" | "away_uncertain";
+  start_ts: number;
+  end_ts: number | null; // null = ainda aberto
+}
+
 export interface AppTotal {
   app_name: string;
   total_secs: number;
@@ -45,17 +53,6 @@ export interface WeeklySummary {
 
 export interface CategoryTotal {
   category: string;
-  total_secs: number;
-}
-
-export interface TaskRule {
-  id: number;
-  keyword: string;
-  task_name: string;
-}
-
-export interface TaskTotal {
-  task: string;
   total_secs: number;
 }
 

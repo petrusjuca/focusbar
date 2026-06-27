@@ -1,4 +1,4 @@
-import type { FocusSession } from "../types";
+import type { FocusSession, IntervalMarker } from "../types";
 import { fmtDuration, fmtTime } from "../format";
 
 const COLORS = [
@@ -18,15 +18,36 @@ function colorFor(name: string): string {
   return COLORS[Math.abs(h) % COLORS.length];
 }
 
-export function FocusTimeline({ sessions }: { sessions: FocusSession[] }) {
-  if (sessions.length === 0) return null;
+const GAP_LABEL: Record<string, string> = {
+  paused: "Monitoramento pausado",
+  away: "Ausente",
+  away_uncertain: "Ausente (incerto)",
+};
 
-  // Janela do dia: do início da 1a sessão ao fim da última.
-  const first = sessions[0].start_ts;
-  const lastEnd = Math.max(
-    ...sessions.map((s) => s.start_ts + s.duration_secs)
-  );
+export function FocusTimeline({
+  sessions,
+  markers = [],
+}: {
+  sessions: FocusSession[];
+  markers?: IntervalMarker[];
+}) {
+  if (sessions.length === 0 && markers.length === 0) return null;
+  const now = Math.floor(Date.now() / 1000);
+
+  // Janela do dia: cobre sessões E marcadores, pra todo minuto ter dono.
+  const starts = [
+    ...sessions.map((s) => s.start_ts),
+    ...markers.map((m) => m.start_ts),
+  ];
+  const ends = [
+    ...sessions.map((s) => s.start_ts + s.duration_secs),
+    ...markers.map((m) => m.end_ts ?? now),
+  ];
+  const first = Math.min(...starts);
+  const lastEnd = Math.max(...ends);
   const span = Math.max(1, lastEnd - first);
+
+  const hasGaps = markers.length > 0;
 
   return (
     <section className="timeline">
@@ -37,12 +58,26 @@ export function FocusTimeline({ sessions }: { sessions: FocusSession[] }) {
         </span>
       </div>
       <div className="ribbon">
+        {/* Marcadores PRIMEIRO (ficam atrás das sessões reais). */}
+        {markers.map((m, i) => {
+          const end = m.end_ts ?? now;
+          const left = ((m.start_ts - first) / span) * 100;
+          const width = Math.max(0.4, ((end - m.start_ts) / span) * 100);
+          return (
+            <div
+              key={`m${i}`}
+              className={`ribbon-gap gap-${m.kind}`}
+              title={`${GAP_LABEL[m.kind] ?? m.kind} · ${fmtTime(m.start_ts)}`}
+              style={{ left: `${left}%`, width: `${width}%` }}
+            />
+          );
+        })}
         {sessions.map((s, i) => {
           const left = ((s.start_ts - first) / span) * 100;
           const width = Math.max(0.4, (s.duration_secs / span) * 100);
           return (
             <div
-              key={i}
+              key={`s${i}`}
               className="ribbon-seg"
               title={`${s.app_name} · ${fmtDuration(s.duration_secs)} · ${fmtTime(
                 s.start_ts
@@ -57,6 +92,14 @@ export function FocusTimeline({ sessions }: { sessions: FocusSession[] }) {
           );
         })}
       </div>
+      {hasGaps && (
+        <div className="ribbon-legend">
+          <span><i className="lg lg-work" /> foco</span>
+          <span><i className="lg lg-paused" /> pausado</span>
+          <span><i className="lg lg-away" /> ausente</span>
+          <span><i className="lg lg-nodata" /> sem dados</span>
+        </div>
+      )}
     </section>
   );
 }

@@ -189,7 +189,7 @@ pub async fn generate(prompt: String) -> Result<String, String> {
         model: model(),
         prompt,
         stream: false,
-        keep_alive: "2m".to_string(),
+        keep_alive: "1m".to_string(),
         options: GenOpts {
             temperature: 0.3,
             // A resposta é UMA linha (SIM/NAO + motivo curto); 200 evita o 3B

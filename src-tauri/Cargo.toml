@@ -1,6 +1,6 @@
 [package]
 name = "focusbar"
-version = "0.3.3"
+version = "0.3.4"
 description = "Assistente de produtividade local"
 authors = ["you"]
 edition = "2021"
@@ -42,4 +42,17 @@ accessibility = "0.1"
 accessibility-sys = "0.1"
 core-foundation = "0.9"
 macos-accessibility-client = "0.0.1"
+
+# Sinais nativos do Windows: áudio (WASAPI), tela bloqueada (WTS), e — na próxima
+# leva — URL da aba via UI Automation. Isolado em cfg(windows): o Mac nunca puxa.
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_System_Com",
+    "Win32_Media_Audio",
+    "Win32_Media_Audio_Endpoints",
+    "Win32_System_RemoteDesktop",
+    "Win32_UI_Accessibility",
+    "Win32_UI_WindowsAndMessaging",
+] }
 

@@ -1,28 +1,43 @@
 import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { fmtClock } from "../format";
+import { fmtClock, parseDuration } from "../format";
 import type { FocusSessionApi } from "../hooks/useFocusSession";
 
-// Card do Modo Foco (Pomodoro) na aba Hoje. Inicia um bloco ligado ao foco atual.
+// Card do Modo Foco — fluxo do mundo real: foco → overtime (conta pra tarefa) →
+// pausa → pós-pausa. Cada transição é confirmada por você, nada automático.
 export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
-  const { phase, remaining, pomodoros, goal, blockPaused, start, stop, toggleBlock } =
-    session;
+  const {
+    phase,
+    remaining,
+    over,
+    goal,
+    blockPaused,
+    pomodoros,
+    breaksSkipped,
+    start,
+    stop,
+    toggleBlock,
+    startBreak,
+    finishTask,
+    skipBreak,
+    startNext,
+  } = session;
   const [custom, setCustom] = useState("");
+  const customSecs = parseDuration(custom);
 
-  async function begin(minutes: number) {
-    let f = "";
+  async function focusGoal(): Promise<string> {
     try {
-      f = (await invoke<string | null>("get_focus")) ?? "";
+      return (await invoke<string | null>("get_focus")) ?? "";
     } catch {
-      /* ignore */
+      return "";
     }
-    start(minutes, f);
   }
-
-  function beginCustom() {
-    const m = parseInt(custom, 10);
-    if (!isNaN(m) && m > 0 && m <= 180) {
-      begin(m);
+  async function begin(seconds: number) {
+    start(seconds, await focusGoal());
+  }
+  async function beginCustom() {
+    if (customSecs) {
+      await begin(customSecs);
       setCustom("");
     }
   }
@@ -32,63 +47,122 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
       <div className="session-card">
         <div className="session-card-top">
           <span className="session-card-title">⏱️ Modo Foco</span>
-          {pomodoros > 0 && <span className="pomos">🍅 {pomodoros} hoje</span>}
+          <span className="pomos">
+            {pomodoros > 0 && <>🍅 {pomodoros}</>}
+            {breaksSkipped > 0 && (
+              <span title="pausas puladas hoje"> · ⏭ {breaksSkipped}</span>
+            )}
+          </span>
         </div>
         <p className="session-card-sub">
-          Um bloco de foco protegido — eu cuido do tempo e te lembro da pausa.
+          Um bloco protegido — eu cuido do tempo e te lembro da pausa.
         </p>
         <div className="session-card-actions">
-          <button className="grant-btn" onClick={() => begin(25)}>
+          <button className="grant-btn" onClick={() => begin(25 * 60)}>
             ▶ Focar 25 min
           </button>
-          <button className="link-btn" onClick={() => begin(15)}>
-            15 min
+          <button className="link-btn" onClick={() => begin(15 * 60)}>
+            15
           </button>
-          <button className="link-btn" onClick={() => begin(50)}>
-            50 min
+          <button className="link-btn" onClick={() => begin(50 * 60)}>
+            50
           </button>
         </div>
         <div className="session-custom">
           <input
             className="session-custom-input"
-            type="number"
-            min={1}
-            max={180}
-            placeholder="min"
+            placeholder="ex: 1h30, 90, 25:00"
             value={custom}
             onChange={(e) => setCustom(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && beginCustom()}
           />
-          <button className="link-btn" onClick={beginCustom} disabled={!custom}>
-            ▶ tempo personalizado
+          <button className="link-btn" onClick={beginCustom} disabled={!customSecs}>
+            ▶ {customSecs ? fmtClock(customSecs) : "tempo livre"}
           </button>
         </div>
       </div>
     );
   }
 
+  const isFocus = phase === "focus";
+  const isOver = phase === "overtime";
   const isBreak = phase === "break";
+  const isBreakOver = phase === "break_over";
+
+  let title = "🟢 Em foco";
+  if (blockPaused) title = "⏸ Pausado";
+  else if (isOver) title = "✅ Tempo cumprido";
+  else if (isBreak) title = "☕ Pausa";
+  else if (isBreakOver) title = "☕ Pausa acabou";
+
+  const clock = isOver || isBreakOver ? `+${fmtClock(over)}` : fmtClock(remaining);
+
   return (
     <div
-      className={`session-card running ${isBreak ? "brk" : "foc"}${
+      className={`session-card running ${isBreak || isBreakOver ? "brk" : "foc"}${
         blockPaused ? " frozen" : ""
       }`}
     >
       <div className="session-card-top">
-        <span className="session-card-title">
-          {blockPaused ? "⏸ Pausado" : isBreak ? "☕ Pausa" : "🟢 Em foco"}
-        </span>
+        <span className="session-card-title">{title}</span>
         {pomodoros > 0 && <span className="pomos">🍅 {pomodoros}</span>}
       </div>
-      {!isBreak && goal && <div className="session-goal">🎯 {goal}</div>}
-      <div className="session-clock">{fmtClock(remaining)}</div>
+      {(isFocus || isOver) && goal && <div className="session-goal">🎯 {goal}</div>}
+      <div className="session-clock">{clock}</div>
+      {isOver && (
+        <p className="session-hint">
+          passou do tempo — isso conta pra tarefa até você iniciar a pausa
+        </p>
+      )}
+      {isBreakOver && <p className="session-hint">no seu tempo — bora quando voltar</p>}
+
       <div className="session-card-actions">
-        <button className="link-btn" onClick={toggleBlock}>
-          {blockPaused ? "retomar" : "pausar"}
-        </button>
-        <button className="link-btn" onClick={stop}>
-          {isBreak ? "pular pausa" : "parar bloco"}
-        </button>
+        {isFocus && (
+          <>
+            <button className="link-btn" onClick={toggleBlock}>
+              {blockPaused ? "retomar" : "pausar"}
+            </button>
+            <button className="grant-btn" onClick={finishTask}>
+              ✓ terminei
+            </button>
+            <button className="link-btn" onClick={stop}>
+              parar
+            </button>
+          </>
+        )}
+        {isOver && (
+          <>
+            <button className="grant-btn" onClick={startBreak}>
+              ☕ iniciar pausa
+            </button>
+            <button className="link-btn" onClick={finishTask}>
+              ✓ terminei a tarefa
+            </button>
+            <button className="link-btn" onClick={stop}>
+              parar
+            </button>
+          </>
+        )}
+        {isBreak && (
+          <>
+            <button className="grant-btn" onClick={() => startNext()}>
+              ▶ próximo agora
+            </button>
+            <button className="link-btn" onClick={skipBreak}>
+              pular pausa
+            </button>
+          </>
+        )}
+        {isBreakOver && (
+          <>
+            <button className="grant-btn" onClick={() => startNext()}>
+              ▶ próximo bloco
+            </button>
+            <button className="link-btn" onClick={skipBreak}>
+              encerrar
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

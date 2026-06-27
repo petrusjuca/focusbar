@@ -6,14 +6,20 @@ import {
   sendNotification,
 } from "@tauri-apps/plugin-notification";
 
-// Modo Foco (Pomodoro): blocos de foco protegidos + pausa, com cronômetro.
-// O timer roda no frontend (a janela fica viva mesmo escondida na bandeja) e
-// persiste em localStorage pra sobreviver a reload/reinício.
+// Modo Foco (Pomodoro) — desenhado pro MUNDO REAL, não pro ideal:
+//  idle → focus → (acabou o tempo) → OVERTIME (conta pra tarefa até você decidir)
+//       → break → (acabou a pausa) → BREAK_OVER (te espera, não pune)
+// Nada de auto-iniciar pausa nem auto-retomar: cada transição PEDE confirmação.
+// O timer roda no frontend e persiste em localStorage (sobrevive reload/reinício).
 
-export type SessionPhase = "idle" | "focus" | "break";
+export type SessionPhase = "idle" | "focus" | "overtime" | "break" | "break_over";
 
-const BREAK_MIN = 5;
+const BREAK_SECS = 5 * 60;
 const KEY = "focus-session";
+
+function today(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 async function notify(title: string, body: string) {
   try {
@@ -25,12 +31,10 @@ async function notify(title: string, body: string) {
   }
 }
 
-// Toque sonoro (sintetizado, sem arquivo) — um "ding-dong" de 2 notas. `rising`
-// (sobe) pro fim do bloco de foco; descendo pro fim da pausa.
+// Toque sintetizado (sem arquivo). `rising` = fim do foco; descendo = fim da pausa.
 function playChime(rising: boolean) {
   try {
-    const Ctx =
-      window.AudioContext || (window as unknown as any).webkitAudioContext;
+    const Ctx = window.AudioContext || (window as unknown as any).webkitAudioContext;
     if (!Ctx) return;
     const ctx = new Ctx();
     ctx.resume?.();
@@ -57,30 +61,42 @@ function playChime(rising: boolean) {
 
 export interface FocusSessionApi {
   phase: SessionPhase;
-  remaining: number; // segundos restantes
-  pomodoros: number; // blocos concluídos hoje
+  remaining: number; // segundos restantes na contagem regressiva (focus/break)
+  over: number; // segundos PASSADOS do fim (overtime/break_over)
   goal: string;
-  blockPaused: boolean; // o BLOCO está congelado?
-  start: (minutes: number, goal: string) => void;
-  stop: () => void;
-  toggleBlock: () => void; // pausa/retoma o bloco em andamento
+  blockPaused: boolean;
+  pomodoros: number; // blocos concluídos hoje
+  breaksSkipped: number; // pausas puladas hoje
+  start: (seconds: number, goal: string) => void;
+  stop: () => void; // encerra tudo → idle (registra o bloco se estava em foco)
+  toggleBlock: () => void; // congela/retoma o bloco (só em focus)
+  startBreak: () => void; // confirma a pausa (a partir do overtime)
+  finishTask: () => void; // "terminei!" → registra + marca a tarefa concluída → pausa
+  skipBreak: () => void; // pula a pausa → idle (conta como pulada)
+  startNext: (seconds?: number, goal?: string) => void; // novo bloco (reusa a duração)
 }
 
 export function useFocusSession(): FocusSessionApi {
   const [phase, setPhaseS] = useState<SessionPhase>("idle");
   const [remaining, setRemaining] = useState(0);
-  const [pomodoros, setPomS] = useState(0);
+  const [over, setOver] = useState(0);
   const [goal, setGoalS] = useState("");
   const [blockPaused, setBPS] = useState(false);
+  const [pomodoros, setPomS] = useState(0);
+  const [breaksSkipped, setSkipS] = useState(0);
 
-  // Fonte da verdade em refs (evita stale-closure no interval).
+  // Fonte da verdade em refs (evita stale-closure no setInterval).
   const phaseRef = useRef<SessionPhase>("idle");
-  const endsAtRef = useRef(0);
-  const pomRef = useRef(0);
+  const endsAtRef = useRef(0); // fim da contagem regressiva (ms epoch)
+  const overStartRef = useRef(0); // início da contagem crescente (ms epoch)
+  const plannedRef = useRef(0); // duração planejada do bloco (s)
+  const blockStartRef = useRef(0); // início do bloco de foco (ms epoch)
   const goalRef = useRef("");
-  const minRef = useRef(0); // duração (min) do bloco em andamento
-  const bpRef = useRef(false); // bloco congelado?
-  const frozenRef = useRef(0); // segundos restantes congelados ao pausar
+  const bpRef = useRef(false);
+  const frozenRef = useRef(0); // segundos congelados ao pausar
+  const pomRef = useRef(0);
+  const skipRef = useRef(0);
+  const dayRef = useRef(today());
 
   function persist() {
     try {
@@ -89,53 +105,125 @@ export function useFocusSession(): FocusSessionApi {
         JSON.stringify({
           phase: phaseRef.current,
           endsAt: endsAtRef.current,
-          pomodoros: pomRef.current,
+          overStart: overStartRef.current,
+          planned: plannedRef.current,
+          blockStart: blockStartRef.current,
           goal: goalRef.current,
-          minutes: minRef.current,
           blockPaused: bpRef.current,
           frozen: frozenRef.current,
+          pomodoros: pomRef.current,
+          breaksSkipped: skipRef.current,
+          day: dayRef.current,
         })
       );
     } catch {
       /* ignore */
     }
   }
-  function setPhase(p: SessionPhase) {
+  const setPhase = (p: SessionPhase) => {
     phaseRef.current = p;
     setPhaseS(p);
-  }
-  function setPom(n: number) {
+  };
+  const setPom = (n: number) => {
     pomRef.current = n;
     setPomS(n);
-  }
-  function setGoal(g: string) {
+  };
+  const setSkip = (n: number) => {
+    skipRef.current = n;
+    setSkipS(n);
+  };
+  const setGoal = (g: string) => {
     goalRef.current = g;
     setGoalS(g);
-  }
-  function setBP(v: boolean) {
+  };
+  const setBP = (v: boolean) => {
     bpRef.current = v;
     setBPS(v);
+  };
+
+  // Segundos já consumidos do bloco de foco atual (respeita pausa).
+  function focusConsumed(): number {
+    if (bpRef.current) return Math.max(0, plannedRef.current - frozenRef.current);
+    const rem = Math.max(0, Math.round((endsAtRef.current - Date.now()) / 1000));
+    return Math.max(0, plannedRef.current - rem);
+  }
+  function overSecs(): number {
+    return Math.max(0, Math.round((Date.now() - overStartRef.current) / 1000));
+  }
+
+  // Fecha o bloco de foco: registra o tempo REAL (planejado consumido + overtime),
+  // opcionalmente marca a tarefa como concluída, e conta o pomodoro.
+  function finishBlock(completed: boolean) {
+    const inFocus = phaseRef.current === "focus";
+    const inOver = phaseRef.current === "overtime";
+    if (!inFocus && !inOver) return;
+    const actual = inOver ? plannedRef.current + overSecs() : focusConsumed();
+    const g = goalRef.current;
+    if (actual > 5) {
+      // Tempo real da tarefa (inclui overtime) — alimenta a dedicação por objetivo.
+      invoke("log_focus_time", { goal: g, secs: actual }).catch(() => {});
+      invoke("log_pomodoro", {
+        goal: g,
+        startTs: Math.round(blockStartRef.current / 1000),
+        plannedSecs: plannedRef.current,
+        actualSecs: actual,
+        completed,
+      }).catch(() => {});
+    }
+    if (completed && g.trim()) {
+      // Sai da lista sozinha — sem precisar ir remover manualmente.
+      invoke("complete_todo_by_text", { text: g }).catch(() => {});
+    }
+    setPom(pomRef.current + 1);
+  }
+
+  function enterBreak() {
+    endsAtRef.current = Date.now() + BREAK_SECS * 1000;
+    setBP(false);
+    setOver(0);
+    setPhase("break");
+    persist();
   }
 
   useEffect(() => {
-    // Restaura sessão anterior (se ainda válida).
+    // Restaura sessão anterior (se ainda fizer sentido).
     try {
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const s = JSON.parse(raw);
-        setPom(typeof s.pomodoros === "number" ? s.pomodoros : 0);
+        if (s.day === today()) {
+          setPom(typeof s.pomodoros === "number" ? s.pomodoros : 0);
+          setSkip(typeof s.breaksSkipped === "number" ? s.breaksSkipped : 0);
+        } else {
+          dayRef.current = today();
+        }
         setGoal(s.goal || "");
-        minRef.current = typeof s.minutes === "number" ? s.minutes : 0;
-        if (s.phase && s.phase !== "idle") {
+        plannedRef.current = typeof s.planned === "number" ? s.planned : 0;
+        blockStartRef.current = typeof s.blockStart === "number" ? s.blockStart : 0;
+        if (s.phase === "focus") {
           if (s.blockPaused) {
             setBP(true);
             frozenRef.current = typeof s.frozen === "number" ? s.frozen : 0;
-            endsAtRef.current = s.endsAt || 0;
-            setPhase(s.phase);
+            setPhase("focus");
             setRemaining(frozenRef.current);
           } else if (s.endsAt > Date.now()) {
             endsAtRef.current = s.endsAt;
-            setPhase(s.phase);
+            setPhase("focus");
+          } else {
+            // Acabou enquanto fechado → entra em overtime a partir do fim.
+            overStartRef.current = s.endsAt || Date.now();
+            setPhase("overtime");
+          }
+        } else if (s.phase === "overtime" || s.phase === "break_over") {
+          overStartRef.current = s.overStart || Date.now();
+          setPhase(s.phase);
+        } else if (s.phase === "break") {
+          if (s.endsAt > Date.now()) {
+            endsAtRef.current = s.endsAt;
+            setPhase("break");
+          } else {
+            overStartRef.current = s.endsAt || Date.now();
+            setPhase("break_over");
           }
         }
       }
@@ -144,86 +232,152 @@ export function useFocusSession(): FocusSessionApi {
     }
 
     const id = setInterval(() => {
-      if (phaseRef.current === "idle") {
+      const p = phaseRef.current;
+      if (p === "idle") {
         setRemaining(0);
+        setOver(0);
         return;
       }
-      // Bloco congelado: trava o relógio no valor pausado.
-      if (bpRef.current) {
-        setRemaining(frozenRef.current);
+      if (p === "focus") {
+        if (bpRef.current) {
+          setRemaining(frozenRef.current);
+          return;
+        }
+        const rem = Math.max(0, Math.round((endsAtRef.current - Date.now()) / 1000));
+        setRemaining(rem);
+        if (rem <= 0) {
+          // Tempo acabou — NÃO inicia pausa. Vira overtime (conta pra tarefa).
+          playChime(true);
+          notify(
+            "Tempo do bloco acabou ⏱️",
+            goalRef.current
+              ? `"${goalRef.current}" — terminou? Confirme a pausa quando quiser.`
+              : "Terminou? Confirme a pausa quando quiser."
+          );
+          overStartRef.current = endsAtRef.current; // conta a partir do fim exato
+          setRemaining(0);
+          setPhase("overtime");
+          persist();
+        }
         return;
       }
-      const rem = Math.max(0, Math.round((endsAtRef.current - Date.now()) / 1000));
-      setRemaining(rem);
-      if (rem > 0) return;
-
-      // Fim da fase atual.
-      if (phaseRef.current === "focus") {
-        setPom(pomRef.current + 1);
-        // Registra o tempo dedicado a esse objetivo (pra "direcionar o dia").
-        invoke("log_focus_time", {
-          goal: goalRef.current,
-          secs: minRef.current * 60,
-        }).catch(() => {});
-        playChime(true);
-        notify(
-          "Bloco concluído! 🎉",
-          goalRef.current
-            ? `"${goalRef.current}" — hora da pausa (${BREAK_MIN}min).`
-            : `Mandou bem. Pausa de ${BREAK_MIN}min.`
-        );
-        endsAtRef.current = Date.now() + BREAK_MIN * 60_000;
-        setPhase("break");
-      } else {
-        playChime(false);
-        notify("Pausa acabou ⏳", "Bora outro bloco de foco?");
-        endsAtRef.current = 0;
-        setPhase("idle");
+      if (p === "overtime") {
+        setOver(overSecs());
+        return;
       }
-      persist();
+      if (p === "break") {
+        const rem = Math.max(0, Math.round((endsAtRef.current - Date.now()) / 1000));
+        setRemaining(rem);
+        if (rem <= 0) {
+          // Pausa acabou — NÃO retoma sozinho. Te espera (sem punir o cafezinho).
+          playChime(false);
+          notify("Pausa acabou ☕", "Bora pro próximo quando voltar.");
+          overStartRef.current = endsAtRef.current;
+          setRemaining(0);
+          setPhase("break_over");
+          persist();
+        }
+        return;
+      }
+      if (p === "break_over") {
+        setOver(overSecs());
+        return;
+      }
     }, 250);
 
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function start(minutes: number, g: string) {
-    endsAtRef.current = Date.now() + minutes * 60_000;
-    minRef.current = minutes;
+  function start(seconds: number, g: string) {
+    const secs = Math.max(1, Math.round(seconds));
+    endsAtRef.current = Date.now() + secs * 1000;
+    blockStartRef.current = Date.now();
+    plannedRef.current = secs;
     setBP(false);
+    setOver(0);
     setGoal(g);
     setPhase("focus");
     persist();
     notify(
       "Foco iniciado 🟢",
-      g ? `${minutes}min em "${g}". Vamos!` : `${minutes}min de foco. Vamos!`
+      g ? `${Math.round(secs / 60)}min em "${g}". Vamos!` : `${Math.round(secs / 60)}min de foco.`
     );
   }
 
   function stop() {
+    // Se estava focando, registra o que rolou antes de zerar.
+    finishBlockIfFocus();
     endsAtRef.current = 0;
+    overStartRef.current = 0;
     setBP(false);
+    setOver(0);
     setPhase("idle");
     persist();
   }
+  function finishBlockIfFocus() {
+    if (phaseRef.current === "focus" || phaseRef.current === "overtime") {
+      finishBlock(false);
+    }
+  }
 
-  // Pausa/retoma o bloco em andamento (congela o relógio).
   function toggleBlock() {
-    if (phaseRef.current === "idle") return;
+    if (phaseRef.current !== "focus") return; // só congela durante o foco
     if (bpRef.current) {
-      // retomar: recomeça a contar do ponto congelado.
       endsAtRef.current = Date.now() + frozenRef.current * 1000;
       setBP(false);
     } else {
-      // pausar: guarda o que falta.
-      frozenRef.current = Math.max(
-        0,
-        Math.round((endsAtRef.current - Date.now()) / 1000)
-      );
+      frozenRef.current = Math.max(0, Math.round((endsAtRef.current - Date.now()) / 1000));
       setBP(true);
     }
     persist();
   }
 
-  return { phase, remaining, pomodoros, goal, blockPaused, start, stop, toggleBlock };
+  // Confirma a pausa (a partir do overtime): fecha o bloco e entra na pausa.
+  function startBreak() {
+    if (phaseRef.current !== "overtime" && phaseRef.current !== "focus") return;
+    finishBlock(false);
+    enterBreak();
+  }
+
+  // "Terminei a tarefa": fecha o bloco, MARCA a tarefa concluída, e oferece pausa.
+  function finishTask() {
+    if (phaseRef.current !== "focus" && phaseRef.current !== "overtime") return;
+    finishBlock(true);
+    enterBreak();
+  }
+
+  // Pula a pausa → idle (e conta como pulada, pra você ver a tendência).
+  function skipBreak() {
+    if (phaseRef.current === "break") {
+      setSkip(skipRef.current + 1);
+    }
+    endsAtRef.current = 0;
+    overStartRef.current = 0;
+    setOver(0);
+    setPhase("idle");
+    persist();
+  }
+
+  function startNext(seconds?: number, g?: string) {
+    const secs = seconds && seconds > 0 ? seconds : plannedRef.current || 25 * 60;
+    start(secs, g ?? goalRef.current);
+  }
+
+  return {
+    phase,
+    remaining,
+    over,
+    goal,
+    blockPaused,
+    pomodoros,
+    breaksSkipped,
+    start,
+    stop,
+    toggleBlock,
+    startBreak,
+    finishTask,
+    skipBreak,
+    startNext,
+  };
 }

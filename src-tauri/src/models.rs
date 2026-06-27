@@ -62,19 +62,14 @@ pub struct CategoryTotal {
     pub total_secs: i64,
 }
 
-/// Regra de task: se o título/app contém `keyword`, a sessão vira a task `task_name`.
+/// Intervalo de ausência de dado real na timeline. `kind`: "paused" | "away" |
+/// "away_uncertain". `end_ts` None = ainda aberto (o frontend fecha em "agora").
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskRule {
+pub struct IntervalMarker {
     pub id: i64,
-    pub keyword: String,
-    pub task_name: String,
-}
-
-/// Tempo total por task.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct TaskTotal {
-    pub task: String,
-    pub total_secs: i64,
+    pub kind: String,
+    pub start_ts: i64,
+    pub end_ts: Option<i64>,
 }
 
 /// Uma dica/insight do dia (kind controla o ícone no frontend).

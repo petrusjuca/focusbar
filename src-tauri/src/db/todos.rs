@@ -50,3 +50,19 @@ pub fn delete(conn: &Connection, id: i64) -> rusqlite::Result<()> {
 pub fn open_count(conn: &Connection) -> rusqlite::Result<i64> {
     conn.query_row("SELECT COUNT(*) FROM todos WHERE done = 0", [], |r| r.get(0))
 }
+
+/// Marca como feita a tarefa ABERTA mais recente cujo texto bate (sem caixa/espaços).
+/// Usado quando você termina um bloco de foco ligado a uma tarefa — ela sai da
+/// lista sozinha, sem precisar ir remover na mão.
+pub fn complete_by_text(conn: &Connection, text: &str, now: i64) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE todos SET done = 1, done_at = ?2
+         WHERE id = (
+            SELECT id FROM todos
+            WHERE done = 0 AND lower(trim(text)) = lower(trim(?1))
+            ORDER BY created_at DESC LIMIT 1
+         )",
+        params![text, now],
+    )?;
+    Ok(())
+}

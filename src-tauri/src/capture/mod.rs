@@ -6,6 +6,8 @@ mod macos;
 pub mod browser;
 pub mod sampler;
 pub mod screen;
+pub mod signals;
+pub mod state;
 
 /// "Olhos" Estágio 1: texto visível da janela em foco via Acessibilidade (sem
 /// screenshot). macOS por enquanto; Windows (UI Automation) é o próximo passo.

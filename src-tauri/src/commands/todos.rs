@@ -37,3 +37,10 @@ pub fn delete_todo(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     db::todos::delete(&conn, id).map_err(|e| e.to_string())
 }
+
+/// Conclui a tarefa cujo texto bate com o foco (ao terminar um bloco).
+#[tauri::command]
+pub fn complete_todo_by_text(state: State<AppState>, text: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::todos::complete_by_text(&conn, text.trim(), now_ts()).map_err(|e| e.to_string())
+}

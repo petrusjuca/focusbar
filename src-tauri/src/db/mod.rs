@@ -8,7 +8,6 @@ use std::path::Path;
 
 pub mod notes;
 pub mod reminders;
-pub mod tasks;
 pub mod todos;
 
 /// Abre (ou cria) o banco em `path`, liga WAL e roda as migrations.
@@ -24,6 +23,36 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         [],
     );
     Ok(conn)
+}
+
+/// Tolerância de continuidade (s) pra agrupar sessões cruas em "atividades".
+/// Um alt-tab rápido pro WhatsApp e de volta não deve fragmentar o trabalho.
+pub const GROUP_GAP_SECS: i64 = 90;
+
+/// Agrupa sessões CRUAS (já ordenadas por start_ts ASC) em blocos de atividade:
+/// sessões consecutivas do MESMO app cujo intervalo entre elas é <= `gap` viram
+/// um bloco só — mata o "confete" de troca de aba/alt-tab. É camada de EXIBIÇÃO:
+/// não toca no dado bruto nem no schema. A duração do bloco é a SOMA das filhas
+/// (respeita o idle-trim; nunca reconta tempo de parede). start_ts/title/id ficam
+/// os da primeira filha.
+pub fn group_sessions(sessions: &[FocusSession], gap: i64) -> Vec<FocusSession> {
+    let mut out: Vec<FocusSession> = Vec::new();
+    let mut last_end: i64 = 0; // fim (start+dur) da última filha do bloco atual
+    for s in sessions {
+        let s_end = s.start_ts + s.duration_secs;
+        if let Some(cur) = out.last_mut() {
+            let gap_to = (s.start_ts - last_end).max(0);
+            if cur.app_name == s.app_name && gap_to <= gap {
+                cur.duration_secs += s.duration_secs;
+                cur.was_idle_trimmed |= s.was_idle_trimmed;
+                last_end = s_end;
+                continue;
+            }
+        }
+        out.push(s.clone());
+        last_end = s_end;
+    }
+    out
 }
 
 fn migrate(conn: &Connection) -> rusqlite::Result<()> {
@@ -76,6 +105,18 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             ts   INTEGER NOT NULL
         );
 
+        -- Histórico rico de cada bloco Pomodoro (pra métricas: quantos, duração
+        -- planejada vs real, se a tarefa foi concluída, horário de sucesso).
+        CREATE TABLE IF NOT EXISTS pomodoro_log (
+            id           INTEGER PRIMARY KEY,
+            goal         TEXT NOT NULL,
+            start_ts     INTEGER NOT NULL,
+            planned_secs INTEGER NOT NULL,
+            actual_secs  INTEGER NOT NULL,
+            completed    INTEGER NOT NULL,
+            ts           INTEGER NOT NULL
+        );
+
         CREATE TABLE IF NOT EXISTS focus_now (
             id     INTEGER PRIMARY KEY CHECK (id = 1),
             text   TEXT NOT NULL,
@@ -107,20 +148,73 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         );
         CREATE INDEX IF NOT EXISTS idx_notes_day ON notes(day);
 
-        CREATE TABLE IF NOT EXISTS task_rules (
-            id        INTEGER PRIMARY KEY,
-            keyword   TEXT NOT NULL UNIQUE,
-            task_name TEXT NOT NULL
-        );
-
         CREATE TABLE IF NOT EXISTS daily_rollups (
             day           TEXT NOT NULL,
             app_id        INTEGER NOT NULL REFERENCES apps(id),
             total_secs    INTEGER NOT NULL,
             session_count INTEGER NOT NULL,
             PRIMARY KEY(day, app_id)
-        );",
+        );
+
+        -- Marcadores de intervalo: ausência de dado REAL na timeline (todo minuto
+        -- com dono). kind: 'paused' | 'away' | 'away_uncertain'. end_ts NULL = aberto.
+        CREATE TABLE IF NOT EXISTS interval_markers (
+            id         INTEGER PRIMARY KEY,
+            kind       TEXT NOT NULL,
+            start_ts   INTEGER NOT NULL,
+            end_ts     INTEGER,
+            created_at INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_marker_kind_start ON interval_markers(kind, start_ts);
+        CREATE INDEX IF NOT EXISTS idx_marker_start ON interval_markers(start_ts);",
     )
+}
+
+/// Abre um marcador de intervalo (ex.: começou a pausa/ausência). Idempotente:
+/// fecha qualquer marcador ABERTO do mesmo kind antes (cura close perdido por crash).
+pub fn open_marker(conn: &Connection, kind: &str, now: i64) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE interval_markers SET end_ts = ?2 WHERE kind = ?1 AND end_ts IS NULL",
+        params![kind, now],
+    )?;
+    conn.execute(
+        "INSERT INTO interval_markers(kind, start_ts, end_ts, created_at)
+         VALUES (?1, ?2, NULL, ?2)",
+        params![kind, now],
+    )?;
+    Ok(())
+}
+
+/// Fecha o marcador aberto do kind (no-op inofensivo se não houver aberto).
+pub fn close_marker(conn: &Connection, kind: &str, now: i64) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE interval_markers SET end_ts = ?2 WHERE kind = ?1 AND end_ts IS NULL",
+        params![kind, now],
+    )?;
+    Ok(())
+}
+
+/// Marcadores que cruzam a janela [start, end). Abertos (end_ts NULL) entram —
+/// o frontend fecha em "agora"/fim do dia.
+pub fn markers_in_range(
+    conn: &Connection,
+    start: i64,
+    end: i64,
+) -> rusqlite::Result<Vec<crate::models::IntervalMarker>> {
+    let mut stmt = conn.prepare(
+        "SELECT id, kind, start_ts, end_ts FROM interval_markers
+         WHERE start_ts < ?2 AND (end_ts IS NULL OR end_ts > ?1)
+         ORDER BY start_ts ASC",
+    )?;
+    let rows = stmt.query_map(params![start, end], |r| {
+        Ok(crate::models::IntervalMarker {
+            id: r.get(0)?,
+            kind: r.get(1)?,
+            start_ts: r.get(2)?,
+            end_ts: r.get(3)?,
+        })
+    })?;
+    rows.collect()
 }
 
 /// Define o "foco atual" (no que a pessoa está tentando trabalhar agora).
@@ -201,6 +295,25 @@ pub fn log_focus_time(conn: &Connection, goal: &str, secs: i64, ts: i64) -> rusq
     conn.execute(
         "INSERT INTO focus_log(goal, secs, ts) VALUES (?1, ?2, ?3)",
         params![goal, secs, ts],
+    )?;
+    Ok(())
+}
+
+/// Registra um bloco Pomodoro concluído (com metadados ricos pras métricas).
+#[allow(clippy::too_many_arguments)]
+pub fn log_pomodoro(
+    conn: &Connection,
+    goal: &str,
+    start_ts: i64,
+    planned_secs: i64,
+    actual_secs: i64,
+    completed: bool,
+    ts: i64,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO pomodoro_log(goal, start_ts, planned_secs, actual_secs, completed, ts)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![goal, start_ts, planned_secs, actual_secs, completed as i64, ts],
     )?;
     Ok(())
 }
@@ -410,4 +523,103 @@ pub fn longest_session(
         },
     )
     .optional()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sess(id: i64, app: &str, start: i64, dur: i64) -> FocusSession {
+        FocusSession {
+            id,
+            app_name: app.into(),
+            title: format!("t{id}"),
+            start_ts: start,
+            duration_secs: dur,
+            was_idle_trimmed: false,
+        }
+    }
+
+    #[test]
+    fn group_empty_is_empty() {
+        assert!(group_sessions(&[], GROUP_GAP_SECS).is_empty());
+    }
+
+    #[test]
+    fn group_collapses_tab_hopping_same_app() {
+        // 3 sessões "Opera" coladas (gap 0) → 1 bloco de 180s.
+        let raw = vec![
+            sess(1, "Opera", 0, 60),
+            sess(2, "Opera", 60, 60),
+            sess(3, "Opera", 120, 60),
+        ];
+        let g = group_sessions(&raw, GROUP_GAP_SECS);
+        assert_eq!(g.len(), 1);
+        assert_eq!(g[0].duration_secs, 180);
+        assert_eq!(g[0].id, 1); // mantém a primeira filha
+        assert_eq!(g[0].start_ts, 0);
+    }
+
+    #[test]
+    fn group_tolerates_short_gap() {
+        // alt-tab de 30s pro WhatsApp e volta — gap < 90s → mesmo bloco.
+        let raw = vec![sess(1, "Opera", 0, 60), sess(2, "Opera", 90, 60)];
+        let g = group_sessions(&raw, GROUP_GAP_SECS);
+        assert_eq!(g.len(), 1);
+        assert_eq!(g[0].duration_secs, 120);
+    }
+
+    #[test]
+    fn group_splits_on_long_gap() {
+        // gap de 120s (> 90) → dois blocos.
+        let raw = vec![sess(1, "Opera", 0, 60), sess(2, "Opera", 180, 60)];
+        let g = group_sessions(&raw, GROUP_GAP_SECS);
+        assert_eq!(g.len(), 2);
+    }
+
+    #[test]
+    fn group_splits_on_app_switch() {
+        let raw = vec![sess(1, "Opera", 0, 60), sess(2, "Code", 60, 60)];
+        let g = group_sessions(&raw, GROUP_GAP_SECS);
+        assert_eq!(g.len(), 2);
+    }
+
+    fn mem() -> Connection {
+        let c = Connection::open_in_memory().unwrap();
+        migrate(&c).unwrap();
+        c
+    }
+
+    #[test]
+    fn marker_open_close() {
+        let c = mem();
+        open_marker(&c, "paused", 1000).unwrap();
+        let open = markers_in_range(&c, 0, 9999).unwrap();
+        assert_eq!(open.len(), 1);
+        assert_eq!(open[0].end_ts, None); // aberto
+        close_marker(&c, "paused", 1500).unwrap();
+        let closed = markers_in_range(&c, 0, 9999).unwrap();
+        assert_eq!(closed[0].end_ts, Some(1500));
+    }
+
+    #[test]
+    fn marker_double_open_closes_first() {
+        let c = mem();
+        open_marker(&c, "away", 100).unwrap();
+        open_marker(&c, "away", 200).unwrap(); // deve fechar o 1º
+        let all = markers_in_range(&c, 0, 9999).unwrap();
+        let abertos = all.iter().filter(|m| m.end_ts.is_none()).count();
+        assert_eq!(abertos, 1); // só um aberto por kind
+    }
+
+    #[test]
+    fn marker_range_overlap() {
+        let c = mem();
+        open_marker(&c, "paused", 100).unwrap();
+        close_marker(&c, "paused", 200).unwrap();
+        // janela que não cruza → vazio
+        assert_eq!(markers_in_range(&c, 300, 400).unwrap().len(), 0);
+        // janela que cruza → 1
+        assert_eq!(markers_in_range(&c, 150, 400).unwrap().len(), 1);
+    }
 }
