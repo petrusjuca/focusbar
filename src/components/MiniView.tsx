@@ -234,8 +234,12 @@ export function MiniView({
             </div>
           </div>
         ) : open.length === 0 ? (
-          <button className="agent-primary" onClick={() => startBlock(focus)}>
-            {focus ? `Focar em "${focus}"` : "Começar um bloco de 25 min"}
+          <button
+            className="agent-primary"
+            onClick={() => startBlock(focus)}
+            title={focus ? `Focar em "${focus}"` : "Começar um bloco de 25 min"}
+          >
+            {focus ? "▶ Focar 25 min" : "▶ Começar 25 min"}
           </button>
         ) : (
           <div className="agent-list">

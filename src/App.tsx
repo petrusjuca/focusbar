@@ -212,8 +212,10 @@ function App() {
         /* sem Ollama — tudo bem, cai na regra por app */
       }
     }
-    const first = setTimeout(tick, 6000);
-    const id = setInterval(tick, 45000);
+    // Throttle: roda esporádico (3min) — categorizar é caro (bate no Ollama).
+    // Assim o modelo descarrega entre usos em vez de ficar quente drenando bateria.
+    const first = setTimeout(tick, 20000);
+    const id = setInterval(tick, 180000);
     return () => {
       clearTimeout(first);
       clearInterval(id);

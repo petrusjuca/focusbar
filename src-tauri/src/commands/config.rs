@@ -93,7 +93,7 @@ pub fn set_setting(state: State<AppState>, key: String, value: String) -> Result
 pub async fn categorize_pending(state: State<'_, AppState>) -> Result<u32, String> {
     let pending = {
         let conn = state.db.lock().map_err(|e| e.to_string())?;
-        db::sessions_needing_category(&conn, 4).map_err(|e| e.to_string())?
+        db::sessions_needing_category(&conn, 2).map_err(|e| e.to_string())?
     };
     let mut done = 0u32;
     for (id, app, title, content) in pending {

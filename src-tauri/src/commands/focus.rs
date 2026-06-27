@@ -178,7 +178,7 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
     let key = format!("{}\u{1}{}\u{1}{}", focus, app, title);
     if let Ok(c) = state.last_check.lock() {
         if let Some(cc) = c.as_ref() {
-            if cc.key == key && now - cc.ts < 120 {
+            if cc.key == key && now - cc.ts < 300 {
                 return Ok(FocusCheck {
                     focus: Some(cc.focus.clone()),
                     app: Some(cc.app.clone()),

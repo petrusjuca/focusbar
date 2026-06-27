@@ -425,6 +425,7 @@ pub fn sessions_needing_category(
         "SELECT f.rowid, a.name, f.title, f.content
          FROM focus_events f JOIN apps a ON a.id = f.app_id
          WHERE f.category_ai IS NULL AND f.content IS NOT NULL AND length(f.content) >= 12
+           AND COALESCE(f.duration_secs, 0) >= 45
          ORDER BY f.start_ts DESC LIMIT ?1",
     )?;
     let rows = stmt.query_map(params![limit], |r| {

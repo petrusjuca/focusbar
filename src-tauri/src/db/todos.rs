@@ -46,11 +46,6 @@ pub fn delete(conn: &Connection, id: i64) -> rusqlite::Result<()> {
     Ok(())
 }
 
-/// Quantas tarefas abertas (para o badge do widget).
-pub fn open_count(conn: &Connection) -> rusqlite::Result<i64> {
-    conn.query_row("SELECT COUNT(*) FROM todos WHERE done = 0", [], |r| r.get(0))
-}
-
 /// Marca como feita a tarefa ABERTA mais recente cujo texto bate (sem caixa/espaços).
 /// Usado quando você termina um bloco de foco ligado a uma tarefa — ela sai da
 /// lista sozinha, sem precisar ir remover na mão.
