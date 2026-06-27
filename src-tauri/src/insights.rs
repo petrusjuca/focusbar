@@ -104,22 +104,10 @@ pub fn day_insights(conn: &Connection, start: i64, end: i64) -> rusqlite::Result
         });
     }
 
-    // Fragmentação — conta ATIVIDADES agrupadas (não o confete de abas), e só
-    // avisa quando NÃO houve nenhum bloco de foco longo (>=60min) no dia. Isso
-    // mata o falso-positivo do alt-tab pra anotar enquanto trabalha.
-    let grouped = db::group_sessions(&sessions, db::GROUP_GAP_SECS);
-    let gcount = grouped.len() as i64;
-    let gavg = total / gcount.max(1);
-    if gcount >= 25 && gavg < 60 && best_run < 3600 {
-        out.push(Insight {
-            kind: "warn".into(),
-            text: format!(
-                "Dia bem picado: {} atividades, média de {}. Talvez valha fechar distrações e ir numa coisa por vez.",
-                gcount,
-                fmt_min(gavg.max(1))
-            ),
-        });
-    }
+    // NÃO avisamos sobre fragmentação / "trocar muito de aba". Pro cérebro
+    // ADHD do Petrus, pular entre janelas é o jeito NORMAL de trabalhar — não é
+    // falha a cobrar. (O coach ao vivo já tinha tirado esse alerta; aqui idem.)
+    // O número de trocas continua visível, sem julgamento, no painel de Dados.
 
     if out.is_empty() {
         out.push(Insight {
