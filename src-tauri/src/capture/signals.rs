@@ -104,18 +104,84 @@ mod imp {
 }
 
 // ───────────────────────── Windows ─────────────────────────
-// TODO(windows): áudio (WASAPI IAudioMeterInformation) + lock (WTS) entram numa
-// leva dedicada, com as assinaturas do windows-rs 0.62 pesquisadas ANTES do CI
-// (a ativação COM IMMDevice::Activate exige cuidado). Por ora stub=false: o idle
-// é o sinal primário e já roda no Windows; só os estados Passivo/Ausente-incerto
-// ficam adormecidos até lá.
+// Paridade com o Mac: áudio via WASAPI (IAudioMeterInformation.GetPeakValue) e
+// tela bloqueada via "input desktop" (quando travado, o desktop de entrada vira
+// o seguro/Winlogon, não o "Default"). Tudo por polling, sem loop de mensagens —
+// casa com o sampler que já chama isso 1x por tick.
 #[cfg(target_os = "windows")]
 mod imp {
+    use windows::Win32::Foundation::HANDLE;
+    use windows::Win32::Media::Audio::Endpoints::IAudioMeterInformation;
+    use windows::Win32::Media::Audio::{
+        eConsole, eRender, IMMDeviceEnumerator, MMDeviceEnumerator,
+    };
+    use windows::Win32::System::Com::{
+        CoCreateInstance, CoInitializeEx, CLSCTX_ALL, COINIT_MULTITHREADED,
+    };
+    use windows::Win32::System::StationsAndDesktops::{
+        CloseDesktop, GetUserObjectInformationW, OpenInputDesktop, DESKTOP_READOBJECTS,
+        DF_ALLOWOTHERACCOUNTHOOK, UOI_NAME,
+    };
+
+    /// Tem som saindo agora? Pega o medidor do dispositivo de saída padrão e olha
+    /// o pico. Limiar baixo: separa "vídeo tocando" de silêncio. Qualquer falha de
+    /// COM/dispositivo → false (idle continua sendo o sinal primário).
     pub fn audio_active() -> bool {
-        false
+        unsafe {
+            // COM em multithread; se já inicializado em outro modo, segue mesmo assim.
+            let _ = CoInitializeEx(None, COINIT_MULTITHREADED);
+
+            let enumerator: IMMDeviceEnumerator =
+                match CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) {
+                    Ok(e) => e,
+                    Err(_) => return false,
+                };
+            let device = match enumerator.GetDefaultAudioEndpoint(eRender, eConsole) {
+                Ok(d) => d,
+                Err(_) => return false, // sem dispositivo de saída
+            };
+            // Activate usa PROPVARIANT internamente (None = sem parâmetros).
+            let meter: IAudioMeterInformation = match device.Activate(CLSCTX_ALL, None) {
+                Ok(m) => m,
+                Err(_) => return false,
+            };
+            meter.GetPeakValue().unwrap_or(0.0) > 0.01
+        }
     }
+
+    /// A tela está bloqueada? Abre o "input desktop": travado → o desktop de
+    /// entrada é o seguro (não "Default"), ou nem dá pra abrir. Polling puro.
     pub fn locked() -> bool {
-        false
+        unsafe {
+            let hdesk = match OpenInputDesktop(
+                DF_ALLOWOTHERACCOUNTHOOK,
+                false,
+                DESKTOP_READOBJECTS,
+            ) {
+                Ok(h) => h,
+                Err(_) => return true, // não conseguiu abrir → provavelmente travado/seguro
+            };
+
+            let mut buf = [0u16; 256];
+            let mut needed: u32 = 0;
+            // GetUserObjectInformationW recebe HANDLE genérico; HDESK é o mesmo ponteiro.
+            let got = GetUserObjectInformationW(
+                HANDLE(hdesk.0),
+                UOI_NAME,
+                Some(buf.as_mut_ptr() as *mut core::ffi::c_void),
+                (buf.len() * 2) as u32,
+                Some(&mut needed),
+            );
+            let _ = CloseDesktop(hdesk);
+
+            if got.is_err() {
+                return false; // na dúvida, NÃO marca ausente (evita falso positivo)
+            }
+            let len = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+            let name = String::from_utf16_lossy(&buf[..len]);
+            // "Default" = desktop normal (desbloqueado). Qualquer outro = travado.
+            !name.eq_ignore_ascii_case("Default")
+        }
     }
 }
 

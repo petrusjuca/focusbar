@@ -78,9 +78,14 @@ pub fn set_ocr_enabled(state: State<AppState>, on: bool) -> Result<(), String> {
 #[tauri::command]
 pub fn get_mcp_info() -> Result<crate::models::McpInfo, String> {
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let bin = if cfg!(target_os = "windows") {
+        "mcp.exe"
+    } else {
+        "mcp"
+    };
     let mcp = exe
         .parent()
-        .map(|p| p.join("mcp"))
+        .map(|p| p.join(bin))
         .ok_or_else(|| "nao achei a pasta do app".to_string())?;
     Ok(crate::models::McpInfo {
         path: mcp.to_string_lossy().to_string(),

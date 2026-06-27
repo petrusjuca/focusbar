@@ -40,6 +40,9 @@ impl WindowProvider for ActiveWinProvider {
     fn current(&self) -> Option<ActiveWindow> {
         match active_win_pos_rs::get_active_window() {
             Ok(w) => {
+                // `title` só é reatribuído no ramo macOS (fallback via AX); fora
+                // dele o `mut` fica ocioso — silencia o aviso sem ramificar o código.
+                #[allow(unused_mut)]
                 let mut title = w.title;
 
                 // No macOS o título via CGWindowList exige Gravação de Tela; se

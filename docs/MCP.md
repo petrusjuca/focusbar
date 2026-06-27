@@ -46,6 +46,16 @@ Reinicie o Claude Desktop depois de editar o JSON.
 
 Todas aceitam o argumento opcional `dia` no formato `AAAA-MM-DD`.
 
+## Windows
+
+O servidor é cross-platform: o binário vira `mcp.exe` e resolve o banco em
+`%APPDATA%\com.petrusjuca.focusbar\focusbar.db`. O CI **compila** o `mcp.exe`,
+mas ele ainda **não é embutido automaticamente no instalador** (NSIS) — isso
+depende de configurar sidecar no Tauri, que precisa ser validado numa máquina
+Windows antes de mexer. Até lá, no Windows aponte o Claude para o `mcp.exe`
+gerado no build. (A tela de MCP no app mostra "não encontrado" quando o binário
+não está ao lado do app.)
+
 ## Protocolo
 
 JSON-RPC 2.0 sobre stdio, uma mensagem por linha. Implementa `initialize`,
