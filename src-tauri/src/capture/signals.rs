@@ -126,10 +126,11 @@ mod imp {
                 Ok(d) => d,
                 Err(_) => return false,
             };
-            let meter: IAudioMeterInformation = match device.Activate(CLSCTX_ALL, None) {
-                Ok(m) => m,
-                Err(_) => return false,
-            };
+            let meter: IAudioMeterInformation =
+                match device.Activate::<IAudioMeterInformation>(CLSCTX_ALL, None) {
+                    Ok(m) => m,
+                    Err(_) => return false,
+                };
             match meter.GetPeakValue() {
                 Ok(peak) => peak > 0.01,
                 Err(_) => false,
@@ -138,29 +139,10 @@ mod imp {
     }
 
     pub fn locked() -> bool {
-        use windows::Win32::System::RemoteDesktop::{
-            WTSFreeMemory, WTSQuerySessionInformationW, WTSSessionInfoEx, WTSINFOEXW,
-            WTS_CURRENT_SERVER_HANDLE, WTS_CURRENT_SESSION,
-        };
-        const WTS_SESSIONSTATE_LOCK: u32 = 0;
-        unsafe {
-            let mut buf: *mut u16 = std::ptr::null_mut();
-            let mut bytes: u32 = 0;
-            let ok = WTSQuerySessionInformationW(
-                Some(WTS_CURRENT_SERVER_HANDLE),
-                WTS_CURRENT_SESSION,
-                WTSSessionInfoEx,
-                &mut buf as *mut _ as *mut windows::core::PWSTR,
-                &mut bytes,
-            );
-            if ok.is_err() || buf.is_null() {
-                return false;
-            }
-            let info = &*(buf as *const WTSINFOEXW);
-            let flags = info.Data.WTSInfoExLevel1.SessionFlags;
-            WTSFreeMemory(buf as *mut core::ffi::c_void);
-            flags == WTS_SESSIONSTATE_LOCK as i32
-        }
+        // TODO(windows): detecção de tela bloqueada via WTS (WTSINFOEX.SessionFlags)
+        // — tem armadilhas de API/union que precisam validar no CI. Por ora false:
+        // o idle (>=5min) já marca "ausente"; o lock só deixaria isso imediato.
+        false
     }
 }
 
