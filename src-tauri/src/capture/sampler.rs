@@ -19,6 +19,20 @@ use tauri::{AppHandle, Emitter};
 const POLL_SECS: u64 = 1;
 const MIN_SESSION_SECS: i64 = 2;
 const IDLE_THRESHOLD_SECS: i64 = 120;
+const CONTENT_DELAY: i64 = 5; // captura o conteúdo só após a sessão estabilizar (s)
+
+/// Texto da janela fraco demais pra categorizar? (curto ou poucas palavras) →
+/// vale acionar o OCR de pixel.
+fn content_is_weak(t: &str) -> bool {
+    let s = t.trim();
+    if s.chars().count() < 40 {
+        return true;
+    }
+    s.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.chars().count() >= 3)
+        .count()
+        < 4
+}
 
 struct OpenSession {
     app_id: i64,
@@ -27,7 +41,9 @@ struct OpenSession {
     label_app: String,    // ex.: "WhatsApp" (site) — usado no banco/coach
     stored_title: String, // título + URL — gravado e mandado pro assistente
     start_ts: i64,
+    pid: i32,
     content: Option<String>, // trecho REDIGIDO da tela (pra IA categorizar por conteúdo)
+    content_done: bool,      // já capturamos o conteúdo desta sessão?
 }
 
 fn now_ts() -> i64 {
@@ -79,6 +95,13 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
         let mut current: Option<OpenSession> = None;
         let mut coach = Coach::new();
         let mut prev_state = state::TickState::Active;
+        // Runtime próprio: o OCR (uni-ocr) é async, mas esta thread é síncrona.
+        // 1 worker basta — só roda esporádico (1x por sessão estável).
+        let ocr_rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .ok();
 
         loop {
             let now = now_ts();
@@ -165,17 +188,6 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
                         .ok()
                         .and_then(|conn| db::get_or_create_app(&conn, &label_app, &bundle).ok());
                     if let Some(app_id) = app_id {
-                        // "Olhos" pra IA categorizar: trecho do texto da janela
-                        // (AX), REDIGIDO. Zonas de exclusão (banco/senha) NUNCA
-                        // são capturadas. (OCR p/ Windows/conteúdo rico = próxima fatia.)
-                        let content = if crate::redact::is_excluded(&w.app_name, &w.title) {
-                            None
-                        } else {
-                            crate::capture::focused_text(w.pid)
-                                .map(|t| crate::redact::redact(&t))
-                                .map(|t| t.chars().take(600).collect::<String>())
-                                .filter(|t| t.trim().len() >= 12)
-                        };
                         current = Some(OpenSession {
                             app_id,
                             raw_app: w.app_name.clone(),
@@ -183,13 +195,52 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
                             label_app,
                             stored_title,
                             start_ts: now,
-                            content,
+                            pid: w.pid,
+                            content: None,
+                            content_done: false,
                         });
                     }
                 }
 
                 let _ = app.emit("focus-changed", &win);
                 coach.note_switch(now);
+            }
+
+            // "Olhos" pra IA categorizar por CONTEÚDO: captura UMA vez por sessão,
+            // só depois que ela ficou estável (>=5s — não OCRa alt-tab de 2s) e a
+            // janela ainda é a mesma. AX primeiro; se vier fraco e o OCR estiver
+            // ligado + com permissão, OCRa os pixels (é o que dá conteúdo no Windows).
+            // Zonas de exclusão (banco/senha) NUNCA são capturadas.
+            if let (Some(w), Some(cur)) = (win.as_ref(), current.as_mut()) {
+                if !cur.content_done
+                    && now - cur.start_ts >= CONTENT_DELAY
+                    && !crate::redact::is_excluded(&w.app_name, &w.title)
+                {
+                    let mut text = crate::capture::focused_text(cur.pid)
+                        .map(|t| crate::redact::redact(&t))
+                        .unwrap_or_default();
+                    if content_is_weak(&text) {
+                        let ocr_on = db
+                            .lock()
+                            .ok()
+                            .and_then(|c| db::get_setting(&c, "ocr_enabled").ok())
+                            .flatten()
+                            .map(|v| v == "1")
+                            .unwrap_or(false);
+                        if ocr_on && crate::capture::screen::screen_recording_granted() {
+                            if let Some(rt) = ocr_rt.as_ref() {
+                                if let Some(t) = rt
+                                    .block_on(crate::capture::screen::ocr_focused_window())
+                                {
+                                    text = crate::redact::redact(&t);
+                                }
+                            }
+                        }
+                    }
+                    cur.content = Some(text.chars().take(600).collect::<String>())
+                        .filter(|t: &String| t.trim().chars().count() >= 12);
+                    cur.content_done = true;
+                }
             }
 
             // Coach ao vivo (usa o nome do site + título com URL).

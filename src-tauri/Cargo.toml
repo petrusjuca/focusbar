@@ -1,6 +1,6 @@
 [package]
 name = "focusbar"
-version = "0.3.4"
+version = "0.3.5"
 description = "Assistente de produtividade local"
 authors = ["you"]
 edition = "2021"
@@ -34,6 +34,8 @@ tauri-plugin-clipboard-manager = "2.3.2"
 xcap = "0.9.6"
 image = "0.25"
 uni-ocr = "0.1.5"
+# Runtime próprio pro sampler (thread síncrona) fazer block_on do OCR (async).
+tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "net"] }
 
 # Captura de título da janela no macOS via API de Acessibilidade (AX),
 # e checagem/solicitação da permissão de Acessibilidade. Só compila no macOS.
