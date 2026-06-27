@@ -71,3 +71,41 @@ pub fn set_ocr_enabled(state: State<AppState>, on: bool) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     db::set_setting(&conn, "ocr_enabled", if on { "1" } else { "0" }).map_err(|e| e.to_string())
 }
+
+/// Lê uma config genérica (onboarding, horário de fim de dia…). None = não setada.
+#[tauri::command]
+pub fn get_setting(state: State<AppState>, key: String) -> Result<Option<String>, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::get_setting(&conn, &key).map_err(|e| e.to_string())
+}
+
+/// Grava uma config genérica.
+#[tauri::command]
+pub fn set_setting(state: State<AppState>, key: String, value: String) -> Result<(), String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::set_setting(&conn, &key, &value).map_err(|e| e.to_string())
+}
+
+/// Categoriza, pela IA e pelo CONTEÚDO, algumas sessões ainda sem categoria.
+/// Chamado pelo frontend de tempos em tempos. Para na 1ª falha (Ollama off).
+/// Retorna quantas classificou. NUNCA segura o lock do DB atravessando um await.
+#[tauri::command]
+pub async fn categorize_pending(state: State<'_, AppState>) -> Result<u32, String> {
+    let pending = {
+        let conn = state.db.lock().map_err(|e| e.to_string())?;
+        db::sessions_needing_category(&conn, 4).map_err(|e| e.to_string())?
+    };
+    let mut done = 0u32;
+    for (id, app, title, content) in pending {
+        match crate::ai::categorize_activity(&app, &title, &content).await {
+            Ok((cat, act)) => {
+                if let Ok(conn) = state.db.lock() {
+                    let _ = db::set_session_category(&conn, id, &cat, &act);
+                    done += 1;
+                }
+            }
+            Err(_) => break, // Ollama provavelmente indisponível — não insiste agora
+        }
+    }
+    Ok(done)
+}

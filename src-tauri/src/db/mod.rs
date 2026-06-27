@@ -15,6 +15,15 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     let conn = Connection::open(path)?;
     conn.pragma_update(None, "journal_mode", "WAL")?;
     migrate(&conn)?;
+    // Colunas novas em bancos já existentes (ADD COLUMN não tem IF NOT EXISTS;
+    // se já existir, o erro é ignorado — efeito idempotente).
+    for col in [
+        "ALTER TABLE focus_events ADD COLUMN content TEXT",
+        "ALTER TABLE focus_events ADD COLUMN category_ai TEXT",
+        "ALTER TABLE focus_events ADD COLUMN activity_ai TEXT",
+    ] {
+        let _ = conn.execute(col, []);
+    }
     // Limpeza: remove ruído (tela de bloqueio etc.) do histórico — não é foco real.
     let _ = conn.execute(
         "DELETE FROM focus_events WHERE app_id IN
@@ -72,7 +81,10 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             start_ts         INTEGER NOT NULL,
             end_ts           INTEGER,
             duration_secs    INTEGER,
-            was_idle_trimmed INTEGER NOT NULL DEFAULT 0
+            was_idle_trimmed INTEGER NOT NULL DEFAULT 0,
+            content          TEXT,  -- trecho REDIGIDO do que estava na tela (pra IA entender)
+            category_ai      TEXT,  -- categoria pela IA via CONTEUDO (nao pelo nome do app)
+            activity_ai      TEXT   -- nome curto da atividade deduzida do conteudo
         );
         CREATE INDEX IF NOT EXISTS idx_focus_start ON focus_events(start_ts);
         CREATE INDEX IF NOT EXISTS idx_focus_app   ON focus_events(app_id, start_ts);
@@ -383,7 +395,8 @@ pub fn get_or_create_app(conn: &Connection, name: &str, bundle: &str) -> rusqlit
     )
 }
 
-/// Grava uma sessão de foco fechada (uma linha por troca de janela).
+/// Grava uma sessão de foco fechada (uma linha por troca de janela). `content` =
+/// trecho redigido do que estava na tela (pra IA categorizar depois pelo conteúdo).
 pub fn insert_session(
     conn: &Connection,
     app_id: i64,
@@ -391,12 +404,45 @@ pub fn insert_session(
     start_ts: i64,
     end_ts: i64,
     idle_trimmed: bool,
+    content: Option<&str>,
 ) -> rusqlite::Result<()> {
     let duration = end_ts - start_ts;
     conn.execute(
-        "INSERT INTO focus_events(app_id, title, start_ts, end_ts, duration_secs, was_idle_trimmed)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![app_id, title, start_ts, end_ts, duration, idle_trimmed as i64],
+        "INSERT INTO focus_events(app_id, title, start_ts, end_ts, duration_secs, was_idle_trimmed, content)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        params![app_id, title, start_ts, end_ts, duration, idle_trimmed as i64, content],
+    )?;
+    Ok(())
+}
+
+/// Sessões que TÊM conteúdo capturado mas ainda NÃO foram categorizadas pela IA.
+/// (id, app_name, title, content). Pra o categorizador processar em lote.
+pub fn sessions_needing_category(
+    conn: &Connection,
+    limit: i64,
+) -> rusqlite::Result<Vec<(i64, String, String, String)>> {
+    let mut stmt = conn.prepare(
+        "SELECT f.rowid, a.name, f.title, f.content
+         FROM focus_events f JOIN apps a ON a.id = f.app_id
+         WHERE f.category_ai IS NULL AND f.content IS NOT NULL AND length(f.content) >= 12
+         ORDER BY f.start_ts DESC LIMIT ?1",
+    )?;
+    let rows = stmt.query_map(params![limit], |r| {
+        Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?))
+    })?;
+    rows.collect()
+}
+
+/// Grava a categoria + nome da atividade que a IA deduziu do conteúdo.
+pub fn set_session_category(
+    conn: &Connection,
+    id: i64,
+    category: &str,
+    activity: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE focus_events SET category_ai = ?2, activity_ai = ?3 WHERE rowid = ?1",
+        params![id, category, activity],
     )?;
     Ok(())
 }
@@ -404,7 +450,7 @@ pub fn insert_session(
 /// Últimas N sessões gravadas (mais recentes primeiro). Para debug/visualização.
 pub fn recent_sessions(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<FocusSession>> {
     let mut stmt = conn.prepare(
-        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid
+        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid, f.category_ai, f.activity_ai
          FROM focus_events f
          JOIN apps a ON a.id = f.app_id
          ORDER BY f.start_ts DESC
@@ -418,6 +464,8 @@ pub fn recent_sessions(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<Fo
             duration_secs: r.get(3)?,
             was_idle_trimmed: r.get::<_, i64>(4)? != 0,
             id: r.get(5)?,
+            category_ai: r.get(6)?,
+            activity_ai: r.get(7)?,
         })
     })?;
     rows.collect()
@@ -461,6 +509,36 @@ pub fn app_totals(conn: &Connection, start: i64, end: i64) -> rusqlite::Result<V
 }
 
 /// Tempo total de foco no intervalo [start, end).
+/// Estatísticas de Pomodoro num intervalo: (qtd, soma_real, qtd_concluídos).
+pub fn pomodoro_stats(conn: &Connection, start: i64, end: i64) -> rusqlite::Result<(i64, i64, i64)> {
+    conn.query_row(
+        "SELECT COUNT(*), COALESCE(SUM(actual_secs), 0), COALESCE(SUM(completed), 0)
+         FROM pomodoro_log WHERE start_ts >= ?1 AND start_ts < ?2",
+        params![start, end],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )
+}
+
+/// Soma dos segundos de marcadores de um kind que cruzam [start, end). Marcador
+/// aberto (end_ts NULL) é fechado em `now`. Aproximado (pro painel/debug).
+pub fn marker_secs(
+    conn: &Connection,
+    kinds: &[&str],
+    start: i64,
+    end: i64,
+    now: i64,
+) -> rusqlite::Result<i64> {
+    let mut total = 0i64;
+    for m in markers_in_range(conn, start, end)? {
+        if kinds.contains(&m.kind.as_str()) {
+            let s = m.start_ts.max(start);
+            let e = m.end_ts.unwrap_or(now).min(end);
+            total += (e - s).max(0);
+        }
+    }
+    Ok(total)
+}
+
 pub fn total_in_range(conn: &Connection, start: i64, end: i64) -> rusqlite::Result<i64> {
     conn.query_row(
         "SELECT COALESCE(SUM(duration_secs), 0)
@@ -478,7 +556,7 @@ pub fn sessions_in_range(
     end: i64,
 ) -> rusqlite::Result<Vec<FocusSession>> {
     let mut stmt = conn.prepare(
-        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid
+        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid, f.category_ai, f.activity_ai
          FROM focus_events f
          JOIN apps a ON a.id = f.app_id
          WHERE f.start_ts >= ?1 AND f.start_ts < ?2
@@ -492,6 +570,8 @@ pub fn sessions_in_range(
             duration_secs: r.get(3)?,
             was_idle_trimmed: r.get::<_, i64>(4)? != 0,
             id: r.get(5)?,
+            category_ai: r.get(6)?,
+            activity_ai: r.get(7)?,
         })
     })?;
     rows.collect()
@@ -504,7 +584,7 @@ pub fn longest_session(
     end: i64,
 ) -> rusqlite::Result<Option<FocusSession>> {
     conn.query_row(
-        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid
+        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid, f.category_ai, f.activity_ai
          FROM focus_events f
          JOIN apps a ON a.id = f.app_id
          WHERE f.start_ts >= ?1 AND f.start_ts < ?2
@@ -519,6 +599,8 @@ pub fn longest_session(
                 duration_secs: r.get(3)?,
                 was_idle_trimmed: r.get::<_, i64>(4)? != 0,
                 id: r.get(5)?,
+                category_ai: r.get(6)?,
+                activity_ai: r.get(7)?,
             })
         },
     )
@@ -537,6 +619,8 @@ mod tests {
             start_ts: start,
             duration_secs: dur,
             was_idle_trimmed: false,
+            category_ai: None,
+            activity_ai: None,
         }
     }
 

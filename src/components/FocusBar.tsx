@@ -46,16 +46,23 @@ export function FocusBar() {
       setCheck(c);
       if (c.on_task === false) {
         // Nudge gentil: no máximo 1 a cada 15min enquanto distraído.
+        // No "dia ruim", o app fica quieto — sem cutucar.
         const now = Date.now();
-        if (now - lastNudge.current > 15 * 60 * 1000) {
+        let mode = "companheiro";
+        try {
+          mode = (await invoke<string | null>("get_setting", { key: "mode" })) ?? "companheiro";
+        } catch {
+          /* ignore */
+        }
+        if (mode !== "dia_ruim" && now - lastNudge.current > 15 * 60 * 1000) {
           lastNudge.current = now;
           try {
             let ok = await isPermissionGranted();
             if (!ok) ok = (await requestPermission()) === "granted";
             if (ok)
               sendNotification({
-                title: "focusbar — foco",
-                body: `Distraído de "${c.focus}"? Você está em ${c.app ?? "outra coisa"}.`,
+                title: "focusbar",
+                body: `Travou em ${c.app ?? "outra coisa"} — quer voltar pro "${c.focus}" ou começar leve? 💛`,
               });
           } catch {
             /* ignore */

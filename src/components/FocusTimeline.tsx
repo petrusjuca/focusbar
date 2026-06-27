@@ -79,9 +79,9 @@ export function FocusTimeline({
             <div
               key={`s${i}`}
               className="ribbon-seg"
-              title={`${s.app_name} · ${fmtDuration(s.duration_secs)} · ${fmtTime(
-                s.start_ts
-              )}`}
+              title={`${s.activity_ai ? s.activity_ai + " · " : ""}${s.app_name}${
+                s.category_ai ? " (" + s.category_ai + ")" : ""
+              } · ${fmtDuration(s.duration_secs)} · ${fmtTime(s.start_ts)}`}
               style={{
                 left: `${left}%`,
                 width: `${width}%`,

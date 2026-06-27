@@ -19,7 +19,8 @@ use commands::assistant::{
     ai_available, ai_day_digest, ai_day_review, ai_pull_model, ai_status, start_ollama,
 };
 use commands::config::{
-    get_focus_time, get_ocr_enabled, log_focus_time, log_pomodoro, set_ocr_enabled,
+    categorize_pending, get_focus_time, get_ocr_enabled, get_setting, log_focus_time,
+    log_pomodoro, set_ocr_enabled, set_setting,
 };
 use commands::focus::{check_focus, get_focus, set_focus, set_focus_judgment};
 use commands::notes::{add_note, delete_note, list_notes};
@@ -35,7 +36,7 @@ use commands::reminders::{
 use commands::sessions::{delete_app_sessions, delete_session, get_recent_sessions};
 use commands::summaries::{
     get_category_summary, get_daily_summary, get_day_insights, get_day_markers, get_day_sessions,
-    get_weekly_summary, set_app_category,
+    get_metrics, get_weekly_summary, set_app_category,
 };
 use models::ActiveWindow;
 use state::AppState;
@@ -199,6 +200,7 @@ pub fn run() {
             get_daily_summary,
             get_day_sessions,
             get_day_markers,
+            get_metrics,
             get_weekly_summary,
             get_category_summary,
             list_reminders,
@@ -231,6 +233,9 @@ pub fn run() {
             set_focus_judgment,
             get_ocr_enabled,
             set_ocr_enabled,
+            get_setting,
+            set_setting,
+            categorize_pending,
             log_focus_time,
             log_pomodoro,
             get_focus_time

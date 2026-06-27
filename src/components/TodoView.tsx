@@ -36,7 +36,7 @@ export function TodoView({
 }: {
   onFocusTask?: (text: string) => void;
 }) {
-  const { open, done, add, toggle, remove } = useTodos();
+  const { open, done, add, toggle, remove } = useTodos(4000);
   const [text, setText] = useState("");
 
   function submit() {

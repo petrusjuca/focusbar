@@ -854,6 +854,259 @@ h1 {
   border: 1px solid var(--border);
 }
 
+/* Onboarding (1ª tela, 30s) */
+.onboarding {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+}
+.ob-card {
+  max-width: 440px;
+  text-align: center;
+}
+.ob-hi {
+  font-size: 1.6rem;
+  font-weight: 800;
+  margin-bottom: 0.6rem;
+}
+.ob-sub {
+  color: var(--text-dim);
+  font-size: 0.95rem;
+  line-height: 1.5;
+  margin-bottom: 1.6rem;
+}
+.ob-q {
+  display: block;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+.ob-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.75rem 0.9rem;
+  font-size: 1rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  margin-bottom: 0.9rem;
+}
+.ob-go {
+  width: 100%;
+  padding: 0.75rem;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #06231a;
+  font-size: 1rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+.ob-go:hover {
+  background: var(--accent-hover);
+}
+.ob-foot {
+  margin-top: 1.1rem;
+  font-size: 0.78rem;
+  color: var(--text-faint);
+}
+
+/* Seletor de modo (tom do dia: companheiro / foco / dia ruim) */
+.mode-select {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 1.4rem 0 0.4rem;
+  justify-content: center;
+}
+.mode-label {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-right: 0.2rem;
+}
+.mode-btn {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  border-radius: 999px;
+  padding: 0.3rem 0.7rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+.mode-btn.active {
+  border-color: var(--accent);
+  color: var(--text);
+  background: rgba(16, 185, 129, 0.12);
+  font-weight: 700;
+}
+
+/* Painel de métricas/dados */
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  margin-bottom: 0.4rem;
+}
+.metric {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 0.7rem 0.8rem;
+  text-align: center;
+}
+.metric-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+.metric-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  margin-top: 0.15rem;
+}
+.metric-hint {
+  font-size: 0.68rem;
+  color: var(--text-faint);
+  margin-top: 0.1rem;
+}
+.metric-dur {
+  font-size: 0.82rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Cascata: intenção do dia → quebra em tarefas */
+.intention-cascade {
+  border-radius: 14px;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.9rem;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+.intent-label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.intent-text {
+  font-size: 1.05rem;
+  font-weight: 700;
+  margin: 0.2rem 0 0.4rem;
+}
+.intent-sub {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+  margin-bottom: 0.7rem;
+}
+.intent-steprow {
+  display: flex;
+  gap: 0.5rem;
+}
+.intent-stepinput {
+  flex: 1;
+  padding: 0.5rem 0.7rem;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+.intent-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+.intent-hint {
+  font-size: 0.76rem;
+  color: var(--text-dim);
+}
+.intent-err {
+  font-size: 0.8rem;
+  color: var(--warn);
+  margin: 0.6rem 0 0;
+}
+.intent-suggestions {
+  margin-top: 0.8rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.6rem;
+}
+.intent-sug-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.74rem;
+  color: var(--text-dim);
+  margin-bottom: 0.4rem;
+}
+.intent-sug-btns {
+  display: flex;
+  gap: 0.6rem;
+}
+.intent-sug-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.intent-sug-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+  font-size: 0.9rem;
+}
+
+/* Rituais do dia (intenção de manhã / fim de dia) */
+.ritual-card {
+  border-radius: 14px;
+  padding: 0.8rem 1rem;
+  margin-bottom: 0.9rem;
+  border: 1px solid var(--border);
+}
+.ritual-card.morning {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.4);
+}
+.ritual-card.eod {
+  background: rgba(99, 102, 241, 0.1);
+  border-color: rgba(99, 102, 241, 0.4);
+}
+.ritual-card.done {
+  background: rgba(16, 185, 129, 0.1);
+  border-color: rgba(16, 185, 129, 0.4);
+  font-size: 0.9rem;
+}
+.ritual-title {
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+.ritual-sub {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-bottom: 0.6rem;
+  line-height: 1.4;
+}
+.ritual-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.ritual-input {
+  flex: 1;
+  min-width: 180px;
+  padding: 0.5rem 0.7rem;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
 /* Banner persistente de pausa — o estado "off" nunca pode ser invisível (TDAH). */
 .pause-banner {
   position: sticky;

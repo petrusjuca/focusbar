@@ -21,6 +21,7 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
     finishTask,
     skipBreak,
     startNext,
+    extend,
   } = session;
   const [custom, setCustom] = useState("");
   const customSecs = parseDuration(custom);
@@ -47,8 +48,8 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
       <div className="session-card">
         <div className="session-card-top">
           <span className="session-card-title">⏱️ Modo Foco</span>
-          <span className="pomos">
-            {pomodoros > 0 && <>🍅 {pomodoros}</>}
+          <span className="pomos" title="pomodoros concluídos hoje">
+            🍅 {pomodoros} hoje
             {breaksSkipped > 0 && (
               <span title="pausas puladas hoje"> · ⏭ {breaksSkipped}</span>
             )}
@@ -105,7 +106,7 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
     >
       <div className="session-card-top">
         <span className="session-card-title">{title}</span>
-        {pomodoros > 0 && <span className="pomos">🍅 {pomodoros}</span>}
+        <span className="pomos" title="pomodoros concluídos hoje">🍅 {pomodoros}</span>
       </div>
       {(isFocus || isOver) && goal && <div className="session-goal">🎯 {goal}</div>}
       <div className="session-clock">{clock}</div>
@@ -122,6 +123,9 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
             <button className="link-btn" onClick={toggleBlock}>
               {blockPaused ? "retomar" : "pausar"}
             </button>
+            <button className="link-btn" onClick={() => extend(5)} title="+5 minutos">
+              +5min
+            </button>
             <button className="grant-btn" onClick={finishTask}>
               ✓ terminei
             </button>
@@ -135,6 +139,9 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
             <button className="grant-btn" onClick={startBreak}>
               ☕ iniciar pausa
             </button>
+            <button className="link-btn" onClick={() => extend(5)} title="mais 5min de foco">
+              +5min foco
+            </button>
             <button className="link-btn" onClick={finishTask}>
               ✓ terminei a tarefa
             </button>
@@ -147,6 +154,9 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
           <>
             <button className="grant-btn" onClick={() => startNext()}>
               ▶ próximo agora
+            </button>
+            <button className="link-btn" onClick={() => extend(5)} title="+5min de pausa">
+              +5min
             </button>
             <button className="link-btn" onClick={skipBreak}>
               pular pausa

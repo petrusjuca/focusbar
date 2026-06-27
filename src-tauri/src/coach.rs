@@ -77,30 +77,46 @@ impl Coach {
                 .unwrap_or_else(|| categorize(app_name, title).to_string());
             let cat = cat_owned.as_str();
 
-            // Procrastinação prolongada.
+            // Modo: "dia_ruim" silencia cutucadas (o app fica gentil, sem cobrar);
+            // "foco" cutuca mais cedo; "companheiro" (padrão) é o equilíbrio.
+            let mode = db
+                .lock()
+                .ok()
+                .and_then(|c| crate::db::get_setting(&c, "mode").ok())
+                .flatten()
+                .unwrap_or_else(|| "companheiro".to_string());
+            let quiet = mode == "dia_ruim";
+            let threshold = if mode == "foco" { 10 * 60 } else { PROCRAST_THRESHOLD };
+
+            // Distração prolongada — TOM SEM CULPA (nunca "você procrastinou").
             if cat == "Procrastinação" {
                 let begin = *self.procrast_start.get_or_insert(start);
                 let dur = now - begin;
-                if dur >= PROCRAST_THRESHOLD && self.cooldown_ok("procrast", now, PROCRAST_COOLDOWN) {
+                if !quiet && dur >= threshold && self.cooldown_ok("procrast", now, PROCRAST_COOLDOWN)
+                {
                     self.fire(
                         app,
                         "procrast",
                         now,
-                        &format!("Você está há {}min em procrastinação 👀", dur / 60),
+                        &format!(
+                            "Travou no {} faz {}min — quer retomar o foco ou começar leve? 💛",
+                            app_name,
+                            dur / 60
+                        ),
                     );
                 }
             } else {
                 self.procrast_start = None;
             }
 
-            // Travado na mesma janela.
+            // Muito tempo na mesma janela — convite gentil pra pausa.
             let stuck = now - start;
-            if stuck >= STUCK_THRESHOLD && self.stuck_alerted_for != Some(start) {
+            if !quiet && stuck >= STUCK_THRESHOLD && self.stuck_alerted_for != Some(start) {
                 self.fire(
                     app,
                     "stuck",
                     now,
-                    &format!("{}min na mesma janela — que tal uma pausa?", stuck / 60),
+                    &format!("{}min sem parar — que tal respirar 5min? ☕", stuck / 60),
                 );
                 self.stuck_alerted_for = Some(start);
             }

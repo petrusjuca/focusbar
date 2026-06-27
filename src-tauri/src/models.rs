@@ -19,6 +19,11 @@ pub struct FocusSession {
     pub start_ts: i64,
     pub duration_secs: i64,
     pub was_idle_trimmed: bool,
+    /// Categoria pela IA via CONTEÚDO da tela (não pelo nome do app). None = ainda
+    /// não processado / sem Ollama → o dashboard cai na regra por app.
+    pub category_ai: Option<String>,
+    /// Nome curto da atividade deduzido do conteúdo ("Estudando Cálculo").
+    pub activity_ai: Option<String>,
 }
 
 /// Total de tempo por app num intervalo. `category` = override do usuário ou "".
@@ -70,6 +75,19 @@ pub struct IntervalMarker {
     pub kind: String,
     pub start_ts: i64,
     pub end_ts: Option<i64>,
+}
+
+/// Métricas cruas do dia (painel de dados / debug — expõe tudo que capturamos).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DayMetrics {
+    pub total_tracked_secs: i64,    // soma das durações de sessão
+    pub session_count: i64,         // nº de sessões (= trocas de janela)
+    pub app_count: i64,             // apps/sites distintos
+    pub pomodoros: i64,             // blocos registrados no pomodoro_log
+    pub pomodoro_avg_secs: i64,     // duração real média dos blocos
+    pub pomodoros_completed: i64,   // blocos marcados como "terminei a tarefa"
+    pub paused_secs: i64,           // tempo com monitoramento pausado
+    pub away_secs: i64,             // tempo ausente (idle/lock)
 }
 
 /// Uma dica/insight do dia (kind controla o ícone no frontend).

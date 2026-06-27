@@ -20,6 +20,10 @@ import { RemindersView } from "./components/RemindersView";
 import { AssistantView } from "./components/AssistantView";
 import { MiniView } from "./components/MiniView";
 import { SelfCheck } from "./components/SelfCheck";
+import { Onboarding } from "./components/Onboarding";
+import { DayRituals } from "./components/DayRituals";
+import { IntentionCascade } from "./components/IntentionCascade";
+import { MetricsPanel } from "./components/MetricsPanel";
 import { DiaryView } from "./components/DiaryView";
 import { TodoView } from "./components/TodoView";
 import { FocusBar } from "./components/FocusBar";
@@ -39,7 +43,7 @@ const WeeklyView = lazy(() =>
 
 const chartFallback = <div className="loading-state">carregando gráfico…</div>;
 
-type Tab = "hoje" | "semana" | "assistente" | "lembretes";
+type Tab = "hoje" | "semana" | "assistente" | "lembretes" | "dados";
 
 function App() {
   const [tab, setTab] = useState<Tab>("hoje");
@@ -57,6 +61,17 @@ function App() {
   const [paused, setPaused] = useState<boolean>(false);
   const [mini, setMini] = useState<boolean>(false);
   const [loaded, setLoaded] = useState<boolean>(false);
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
+  const [mode, setModeS] = useState<string>("companheiro");
+
+  async function setMode(m: string) {
+    setModeS(m);
+    try {
+      await invoke("set_setting", { key: "mode", value: m });
+    } catch {
+      /* ignore */
+    }
+  }
   const [prevSize, setPrevSize] = useState<{ w: number; h: number } | null>(null);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
   const [showDetails, setShowDetails] = useState<boolean>(false);
@@ -163,6 +178,34 @@ function App() {
   }, []);
 
   useEffect(() => {
+    invoke<string | null>("get_setting", { key: "onboarded" })
+      .then((v) => setOnboarded(v === "1"))
+      .catch(() => setOnboarded(true)); // em erro, não trava o app
+    invoke<string | null>("get_setting", { key: "mode" })
+      .then((v) => v && setModeS(v))
+      .catch(() => {});
+  }, []);
+
+  // Categorizador por CONTEÚDO (em background): a IA lê o que estava na tela e
+  // classifica a atividade — em vez de chutar pelo nome do app. Para sozinho se
+  // o Ollama estiver off. O poll de dados (20s) reflete as categorias novas.
+  useEffect(() => {
+    async function tick() {
+      try {
+        await invoke<number>("categorize_pending");
+      } catch {
+        /* sem Ollama — tudo bem, cai na regra por app */
+      }
+    }
+    const first = setTimeout(tick, 6000);
+    const id = setInterval(tick, 45000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, []);
+
+  useEffect(() => {
     invoke<boolean>("get_autostart").then(setAutostart).catch(() => {});
     const id = setInterval(() => {
       invoke<boolean>("get_paused").then(setPaused).catch(() => {});
@@ -249,6 +292,11 @@ function App() {
         onTogglePause={togglePause}
       />
     );
+  }
+
+  // Primeiro uso: tela de 30s, antes de qualquer dashboard.
+  if (onboarded === false) {
+    return <Onboarding onDone={() => setOnboarded(true)} />;
   }
 
   return (
@@ -411,6 +459,12 @@ function App() {
         >
           Lembretes
         </button>
+        <button
+          className={tab === "dados" ? "tab active" : "tab"}
+          onClick={() => setTab("dados")}
+        >
+          Dados
+        </button>
       </div>
 
       {!loaded && tab === "hoje" && (
@@ -419,6 +473,8 @@ function App() {
 
       {tab === "lembretes" ? (
         <RemindersView />
+      ) : tab === "dados" ? (
+        <MetricsPanel session={session} />
       ) : tab === "assistente" ? (
         <AssistantView />
       ) : tab === "semana" ? (
@@ -433,9 +489,13 @@ function App() {
         )
       ) : (
         <>
+          {/* Rituais: ele te puxa (intenção de manhã, fim de dia) — você não precisa lembrar */}
+          <DayRituals />
           {/* Núcleo acionável (TDAH: o que importa AGORA, sem rolagem infinita) */}
           <FocusBar />
           <FocusSessionCard session={session} />
+          {/* Cascata: intenção do dia → quebra em tarefas (os passos) ↓ */}
+          <IntentionCascade />
           <TodoView onFocusTask={focusTask} />
           <InsightsPanel insights={dayInsights} />
           <DedicationToday refreshKey={session.pomodoros} />
@@ -524,6 +584,29 @@ function App() {
         </>
       )}
 
+      <div className="mode-select">
+        <span className="mode-label">modo de hoje:</span>
+        {[
+          ["companheiro", "🤝 companheiro"],
+          ["foco", "🎯 foco"],
+          ["dia_ruim", "🌧️ dia ruim"],
+        ].map(([v, l]) => (
+          <button
+            key={v}
+            className={mode === v ? "mode-btn active" : "mode-btn"}
+            onClick={() => setMode(v)}
+            title={
+              v === "dia_ruim"
+                ? "sem cobranças hoje — o app fica quieto e gentil"
+                : v === "foco"
+                  ? "te puxa mais cedo quando dispersa"
+                  : "equilíbrio: te acompanha sem encher"
+            }
+          >
+            {l}
+          </button>
+        ))}
+      </div>
       <footer className="footer">
         <button
           className="mini-toggle"

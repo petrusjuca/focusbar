@@ -131,6 +131,7 @@ export function MiniView({
   const timerActions: { label: string; on: () => void }[] = isFocus
     ? [
         { label: session.blockPaused ? "retomar" : "pausar", on: session.toggleBlock },
+        { label: "+5min", on: () => session.extend(5) },
         { label: "terminei", on: session.finishTask },
       ]
     : isOver

@@ -27,6 +27,7 @@ struct OpenSession {
     label_app: String,    // ex.: "WhatsApp" (site) — usado no banco/coach
     stored_title: String, // título + URL — gravado e mandado pro assistente
     start_ts: i64,
+    content: Option<String>, // trecho REDIGIDO da tela (pra IA categorizar por conteúdo)
 }
 
 fn now_ts() -> i64 {
@@ -137,6 +138,7 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
                                 prev.start_ts,
                                 end,
                                 is_idle,
+                                prev.content.as_deref(),
                             );
                         }
                     }
@@ -163,6 +165,17 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
                         .ok()
                         .and_then(|conn| db::get_or_create_app(&conn, &label_app, &bundle).ok());
                     if let Some(app_id) = app_id {
+                        // "Olhos" pra IA categorizar: trecho do texto da janela
+                        // (AX), REDIGIDO. Zonas de exclusão (banco/senha) NUNCA
+                        // são capturadas. (OCR p/ Windows/conteúdo rico = próxima fatia.)
+                        let content = if crate::redact::is_excluded(&w.app_name, &w.title) {
+                            None
+                        } else {
+                            crate::capture::focused_text(w.pid)
+                                .map(|t| crate::redact::redact(&t))
+                                .map(|t| t.chars().take(600).collect::<String>())
+                                .filter(|t| t.trim().len() >= 12)
+                        };
                         current = Some(OpenSession {
                             app_id,
                             raw_app: w.app_name.clone(),
@@ -170,6 +183,7 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
                             label_app,
                             stored_title,
                             start_ts: now,
+                            content,
                         });
                     }
                 }

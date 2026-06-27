@@ -2,8 +2,10 @@ use crate::category::{categorize, effective};
 use crate::db;
 use crate::insights::day_insights;
 use crate::models::{
-    CategoryTotal, DailySummary, DayTotal, FocusSession, Insight, IntervalMarker, WeeklySummary,
+    CategoryTotal, DailySummary, DayMetrics, DayTotal, FocusSession, Insight, IntervalMarker,
+    WeeklySummary,
 };
+use std::collections::HashSet;
 use crate::state::AppState;
 use chrono::{Duration, Local, LocalResult, NaiveDate, TimeZone};
 use std::collections::HashMap;
@@ -88,6 +90,42 @@ pub fn get_day_sessions(
     Ok(db::group_sessions(&raw, db::GROUP_GAP_SECS))
 }
 
+/// Métricas cruas do dia (painel de dados / debug — expõe tudo que capturamos).
+#[tauri::command]
+pub fn get_metrics(state: State<AppState>, day: Option<String>) -> Result<DayMetrics, String> {
+    let (start, end, _) = bounds_for_date(parse_day(day.as_deref()));
+    let now = chrono::Local::now().timestamp();
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+
+    let sessions = db::sessions_in_range(&conn, start, end).map_err(|e| e.to_string())?;
+    let total_tracked_secs: i64 = sessions.iter().map(|s| s.duration_secs).sum();
+    let session_count = sessions.len() as i64;
+    let app_count = sessions
+        .iter()
+        .map(|s| s.app_name.as_str())
+        .collect::<HashSet<_>>()
+        .len() as i64;
+
+    let (pomodoros, pomo_sum, pomodoros_completed) =
+        db::pomodoro_stats(&conn, start, end).map_err(|e| e.to_string())?;
+    let pomodoro_avg_secs = if pomodoros > 0 { pomo_sum / pomodoros } else { 0 };
+
+    let paused_secs = db::marker_secs(&conn, &["paused"], start, end, now).map_err(|e| e.to_string())?;
+    let away_secs = db::marker_secs(&conn, &["away", "away_uncertain"], start, end, now)
+        .map_err(|e| e.to_string())?;
+
+    Ok(DayMetrics {
+        total_tracked_secs,
+        session_count,
+        app_count,
+        pomodoros,
+        pomodoro_avg_secs,
+        pomodoros_completed,
+        paused_secs,
+        away_secs,
+    })
+}
+
 /// Marcadores de intervalo do dia (pausado / ausente) — pra timeline rotular
 /// cada minuto (o "sem dados" é derivado no frontend pelos buracos restantes).
 #[tauri::command]
@@ -113,7 +151,18 @@ pub fn get_category_summary(
 
     let mut totals: HashMap<String, i64> = HashMap::new();
     for s in &sessions {
-        let cat = effective(&overrides, &s.app_name, &s.title);
+        // Prioridade: override do usuário > categoria por CONTEÚDO (IA) > regra por app.
+        let cat = if let Some(c) = db::app_category(&conn, &s.app_name)
+            .ok()
+            .flatten()
+            .filter(|c| !c.is_empty())
+        {
+            c
+        } else if let Some(c) = s.category_ai.clone() {
+            c
+        } else {
+            effective(&overrides, &s.app_name, &s.title)
+        };
         *totals.entry(cat).or_insert(0) += s.duration_secs;
     }
 

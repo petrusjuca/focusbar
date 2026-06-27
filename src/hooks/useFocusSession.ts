@@ -74,6 +74,7 @@ export interface FocusSessionApi {
   finishTask: () => void; // "terminei!" → registra + marca a tarefa concluída → pausa
   skipBreak: () => void; // pula a pausa → idle (conta como pulada)
   startNext: (seconds?: number, goal?: string) => void; // novo bloco (reusa a duração)
+  extend: (minutes: number) => void; // soma tempo ao bloco/pausa em andamento
 }
 
 export function useFocusSession(): FocusSessionApi {
@@ -364,6 +365,37 @@ export function useFocusSession(): FocusSessionApi {
     start(secs, g ?? goalRef.current);
   }
 
+  // Soma minutos ao bloco/pausa em andamento. No foco, também aumenta o
+  // "planejado" (pra contagem de overtime ficar certa). No overtime, dá um
+  // novo fôlego: volta pra foco com esse tempo.
+  function extend(minutes: number) {
+    const add = Math.round(minutes * 60);
+    if (add <= 0) return;
+    const p = phaseRef.current;
+    if (p === "focus") {
+      plannedRef.current += add;
+      if (bpRef.current) {
+        frozenRef.current += add;
+      } else {
+        endsAtRef.current += add * 1000;
+      }
+    } else if (p === "overtime") {
+      plannedRef.current += add + overSecs(); // o overtime já corrido vira parte do plano
+      endsAtRef.current = Date.now() + add * 1000;
+      setOver(0);
+      setPhase("focus");
+    } else if (p === "break" || p === "break_over") {
+      if (p === "break_over") {
+        setOver(0);
+        setPhase("break");
+      }
+      endsAtRef.current = (p === "break" ? endsAtRef.current : Date.now()) + add * 1000;
+    } else {
+      return;
+    }
+    persist();
+  }
+
   return {
     phase,
     remaining,
@@ -379,5 +411,6 @@ export function useFocusSession(): FocusSessionApi {
     finishTask,
     skipBreak,
     startNext,
+    extend,
   };
 }

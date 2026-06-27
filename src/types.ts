@@ -15,6 +15,8 @@ export interface FocusSession {
   start_ts: number;
   duration_secs: number;
   was_idle_trimmed: boolean;
+  category_ai: string | null; // categoria pela IA via conteúdo (não pelo app)
+  activity_ai: string | null; // nome curto da atividade ("Estudando Cálculo")
 }
 
 // Intervalo de ausência de dado real (todo minuto com dono na timeline).
@@ -54,6 +56,17 @@ export interface WeeklySummary {
 export interface CategoryTotal {
   category: string;
   total_secs: number;
+}
+
+export interface DayMetrics {
+  total_tracked_secs: number;
+  session_count: number;
+  app_count: number;
+  pomodoros: number;
+  pomodoro_avg_secs: number;
+  pomodoros_completed: number;
+  paused_secs: number;
+  away_secs: number;
 }
 
 export interface Insight {

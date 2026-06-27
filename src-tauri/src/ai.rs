@@ -218,3 +218,57 @@ pub async fn generate(prompt: String) -> Result<String, String> {
     let parsed: GenResp = resp.json().await.map_err(|e| e.to_string())?;
     Ok(parsed.response.trim().to_string())
 }
+
+/// Normaliza o que o modelo respondeu pra UMA categoria conhecida do dashboard.
+fn normalize_category(raw: &str) -> Option<String> {
+    let r = raw.to_lowercase();
+    let cat = if r.contains("distra") || r.contains("procrastin") {
+        "Procrastinação"
+    } else if r.contains("estud") {
+        "Estudo"
+    } else if r.contains("comunica") {
+        "Comunicação"
+    } else if r.contains("pessoal") {
+        "Pessoal"
+    } else if r.contains("trabalh") {
+        "Trabalho"
+    } else if r.contains("ferramenta") {
+        "Ferramenta"
+    } else {
+        return None;
+    };
+    Some(cat.to_string())
+}
+
+/// Classifica uma atividade pelo CONTEÚDO da tela (não pelo nome do app) e dá um
+/// nome curto. Ex.: YouTube com "Cálculo 1 - derivadas" → ("Estudo","Estudando Cálculo").
+/// Precisa do Ollama. Retorna (categoria, nome_atividade).
+pub async fn categorize_activity(
+    app: &str,
+    title: &str,
+    content: &str,
+) -> Result<(String, String), String> {
+    let prompt = format!(
+        "Você classifica uma atividade de computador pelo CONTEÚDO da tela — NUNCA pelo \
+nome do app/site. Ex.: um vídeo de 'Cálculo 1 - derivadas' no YouTube é ESTUDO, não \
+distração; uma novela é DISTRAÇÃO.\n\
+Categorias (escolha UMA, exatamente): Trabalho, Estudo, Pessoal, Comunicação, Procrastinação.\n\
+App: {app}\n\
+Título: {title}\n\
+Texto na tela: \"{content}\"\n\n\
+Responda em DUAS linhas, em português:\n\
+CATEGORIA: <uma das cinco acima>\n\
+ATIVIDADE: <nome curto do que a pessoa fazia, 2 a 5 palavras, baseado no texto>"
+    );
+    let resp = generate(prompt).await?;
+    let cat_line = line_value(&resp, "categoria").unwrap_or_default();
+    let category = normalize_category(&cat_line).ok_or("categoria não reconhecida")?;
+    let activity: String = line_value(&resp, "atividade")
+        .unwrap_or_default()
+        .trim()
+        .trim_matches(|c: char| c == '"' || c == '\'')
+        .chars()
+        .take(60)
+        .collect();
+    Ok((category, activity))
+}
