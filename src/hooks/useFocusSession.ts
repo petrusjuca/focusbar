@@ -292,6 +292,13 @@ export function useFocusSession(): FocusSessionApi {
 
   function start(seconds: number, g: string) {
     const secs = Math.max(1, Math.round(seconds));
+    // Lembra a última duração escolhida — clicar numa tarefa reusa ISSO, não um
+    // 25min cravado (suas tarefas levam 10, 50, 90min... cada uma a sua).
+    try {
+      localStorage.setItem("focus-last-secs", String(secs));
+    } catch {
+      /* ignore */
+    }
     endsAtRef.current = Date.now() + secs * 1000;
     blockStartRef.current = Date.now();
     plannedRef.current = secs;

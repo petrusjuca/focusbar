@@ -79,13 +79,16 @@ function App() {
   const session = useFocusSession();
 
   // Tarefa → Foco: define o foco e inicia um bloco Pomodoro JÁ naquela tarefa.
+  // Usa a ÚLTIMA duração que você escolheu (não um 25min cravado) — cada tarefa
+  // leva o tempo que leva. Dá pra ajustar com +5/−5 ou o campo custom no card.
   async function focusTask(text: string) {
     try {
       await invoke("set_focus", { text });
     } catch (e) {
       setError(friendlyError(e));
     }
-    session.start(25 * 60, text);
+    const last = Number(localStorage.getItem("focus-last-secs")) || 25 * 60;
+    session.start(last, text);
     setTab("hoje");
   }
 
