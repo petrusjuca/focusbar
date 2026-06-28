@@ -224,7 +224,7 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
         && ocr_enabled
         && crate::capture::screen::screen_recording_granted()
     {
-        if let Some(t) = crate::capture::screen::ocr_focused_window().await {
+        if let Some(t) = crate::capture::screen::ocr_window_by_pid(pid).await {
             extra = redact::redact(&t);
         }
     }

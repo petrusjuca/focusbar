@@ -44,27 +44,37 @@ pub fn request_screen_recording() -> bool {
     perm::request()
 }
 
-/// Captura a imagem da janela ATUALMENTE em foco (só ela). `None` se não houver
-/// janela visível em foco ou a captura falhar. Bitmap em memória, nunca salvo.
-pub fn capture_focused_window() -> Option<image::RgbaImage> {
+/// Captura a imagem da janela do processo `pid` (só ela). Casa pelo PID, NÃO por
+/// "quem está em foco agora" — porque entre a decisão de capturar e a captura em
+/// si o foco pode mudar (o OCR leva segundos). Capturar pelo PID da sessão impede
+/// dois bugs: (a) atribuir o texto da janela errada à sessão; (b) — crítico —
+/// fotografar um app sensível (banco/senha) que ganhou foco no meio. Se a janela
+/// sumiu, devolve `None`. Bitmap em memória, nunca salvo.
+pub fn capture_window_by_pid(pid: i32) -> Option<image::RgbaImage> {
+    let target = pid as u32;
     let windows = xcap::Window::all().ok()?;
+    // Prefere a janela em foco DESSE pid; senão, a primeira não-minimizada dele.
+    let mut fallback: Option<xcap::Window> = None;
     for w in windows {
+        if w.pid().unwrap_or(0) != target || w.is_minimized().unwrap_or(false) {
+            continue;
+        }
         if w.is_focused().unwrap_or(false) {
-            if w.is_minimized().unwrap_or(false) {
-                return None;
-            }
             return w.capture_image().ok();
         }
+        if fallback.is_none() {
+            fallback = Some(w);
+        }
     }
-    None
+    fallback.and_then(|w| w.capture_image().ok())
 }
 
-/// OCR da janela em foco (Estágio 2). Captura SÓ a janela em foco e roda o OCR
-/// NATIVO do SO (Apple Vision no Mac, Windows OCR no Win) em MEMÓRIA — a imagem
-/// nunca toca o disco. Devolve o texto lido. Best-effort; precisa de permissão
-/// de Gravação de Tela. O chamador deve passar o texto pelo porteiro (redact).
-pub async fn ocr_focused_window() -> Option<String> {
-    let rgba = capture_focused_window()?;
+/// OCR da janela do processo `pid` (Estágio 2). Captura SÓ aquela janela e roda o
+/// OCR NATIVO do SO (Apple Vision no Mac, Windows OCR no Win) em MEMÓRIA — a
+/// imagem nunca toca o disco. Devolve o texto lido. Best-effort; precisa de
+/// permissão de Gravação de Tela. O chamador deve passar o texto pelo porteiro.
+pub async fn ocr_window_by_pid(pid: i32) -> Option<String> {
+    let rgba = capture_window_by_pid(pid)?;
     let img = image::DynamicImage::ImageRgba8(rgba);
     let engine = uni_ocr::OcrEngine::new(uni_ocr::OcrProvider::Auto)
         .ok()?

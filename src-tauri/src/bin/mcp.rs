@@ -36,15 +36,24 @@ fn main() {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
 
-    for line in stdin.lock().lines() {
-        let line = match line {
-            Ok(l) => l,
-            Err(_) => break,
-        };
-        if line.trim().is_empty() {
+    // Lê por bytes (read_until) + from_utf8_lossy: UTF-8 inválido vira caractere
+    // de substituição e a linha é só descartada — NÃO derruba o servidor (o
+    // `lines()` antigo dava Err e a gente quebrava o loop à toa).
+    let mut reader = stdin.lock();
+    let mut raw: Vec<u8> = Vec::new();
+    loop {
+        raw.clear();
+        match reader.read_until(b'\n', &mut raw) {
+            Ok(0) => break,  // EOF: stdin fechado
+            Ok(_) => {}
+            Err(_) => break, // erro de I/O real (pipe quebrado) → encerra
+        }
+        let line = String::from_utf8_lossy(&raw);
+        let line = line.trim();
+        if line.is_empty() {
             continue;
         }
-        let req: Value = match serde_json::from_str(&line) {
+        let req: Value = match serde_json::from_str(line) {
             Ok(v) => v,
             Err(_) => continue, // ignora lixo
         };
@@ -322,12 +331,15 @@ fn day_bounds(dia: Option<&str>) -> (i64, i64) {
 }
 
 fn local_midnight(date: NaiveDate) -> i64 {
-    let naive = date.and_hms_opt(0, 0, 0).unwrap();
-    Local
-        .from_local_datetime(&naive)
-        .earliest()
-        .map(|t| t.timestamp())
-        .unwrap_or(0)
+    // 00:00 pode NÃO existir num dia de horário-de-verão (spring-forward); aí
+    // `earliest()` é None. Cair em 0 colapsaria o dia em "1970→hoje", então
+    // usamos 01:00 como rede (sempre existe) — desloca 1h só nesse dia raro.
+    let at = |h, m| {
+        date.and_hms_opt(h, m, 0)
+            .and_then(|n| Local.from_local_datetime(&n).earliest())
+            .map(|t| t.timestamp())
+    };
+    at(0, 0).or_else(|| at(1, 0)).unwrap_or(0)
 }
 
 fn fmt_dur(secs: i64) -> String {

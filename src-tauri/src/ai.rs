@@ -257,8 +257,13 @@ pub async fn categorize_activity(
 REGRA DE OURO: só dê uma categoria se o TEXTO DA TELA mostrar do que se trata. Se \
 o texto for genérico (menu, lista, sem assunto) e não deixar claro o que a pessoa \
 fazia, responda CATEGORIA: INCERTO. NUNCA invente, NUNCA deduza pelo nome do app.\n\
-Ex.: vídeo 'Cálculo 1 - derivadas' → Estudo (o texto prova). \
-Tela genérica de um app qualquer → INCERTO.\n\
+O ASSUNTO aparecer na tela NÃO torna a atividade produtiva: baixar torrent, \
+assistir série/filme/novela, ver gameplay ou rolar feed é Procrastinação MESMO \
+que o nome do arquivo/vídeo apareça. Estudo/Trabalho exigem sinal real de estudo \
+ou trabalho (matéria, curso, código, documento, planilha), não só um título.\n\
+Ex.: vídeo 'Cálculo 1 - derivadas' → Estudo. \
+'Baixando Breaking.Bad.mkv' → Procrastinação (é uma série, não estudo). \
+Tela genérica → INCERTO.\n\
 Categorias possíveis: Trabalho, Estudo, Pessoal, Comunicação, Procrastinação, INCERTO.\n\
 App: {app}\n\
 Título: {title}\n\
@@ -293,14 +298,20 @@ ATIVIDADE: <2 a 5 palavras COPIADAS do próprio texto; se INCERTO, escreva: -->"
 }
 
 /// A atividade tem lastro no texto da tela? Verdadeira se alguma palavra
-/// significativa (>=4 letras) da atividade aparece no conteúdo (sem acento/caixa).
+/// significativa (>=4 letras) da atividade aparece como TOKEN INTEIRO no conteúdo
+/// (sem acento/caixa). Casa por token, não por substring — senão "casa" daria
+/// match em "casamento" (a category.rs já evita isso da mesma forma).
 fn activity_grounded(activity: &str, content: &str) -> bool {
-    let haystack = fold(content);
+    let tokens: std::collections::HashSet<String> = fold(content)
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.chars().count() >= 4)
+        .map(|w| w.to_string())
+        .collect();
     activity
         .split(|c: char| !c.is_alphanumeric())
         .map(fold)
         .filter(|w| w.chars().count() >= 4)
-        .any(|w| haystack.contains(&w))
+        .any(|w| tokens.contains(&w))
 }
 
 /// minúsculas + sem acento, pra casar texto de forma robusta.
@@ -346,6 +357,14 @@ mod tests {
     fn short_words_dont_count_as_evidence() {
         // Só palavras curtas em comum (<4 letras) não bastam como prova.
         assert!(!activity_grounded("ver os pdf", "ABC de la os um"));
+    }
+
+    #[test]
+    fn substring_is_not_evidence() {
+        // "casa" NÃO pode dar lastro em "casamento" — casa por token inteiro.
+        assert!(!activity_grounded("casa nova", "festa de casamento ontem"));
+        // mas o token inteiro conta como prova:
+        assert!(activity_grounded("planejando casamento", "lista do casamento e convites"));
     }
 
     #[test]

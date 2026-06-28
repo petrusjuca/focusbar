@@ -229,9 +229,12 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
                             .unwrap_or(false);
                         if ocr_on && crate::capture::screen::screen_recording_granted() {
                             if let Some(rt) = ocr_rt.as_ref() {
-                                if let Some(t) = rt
-                                    .block_on(crate::capture::screen::ocr_focused_window())
-                                {
+                                // Captura pela janela do PID DESTA sessão (cur.pid),
+                                // não "a em foco agora" — o block_on leva segundos e
+                                // o foco pode trocar pra um app sensível no meio.
+                                if let Some(t) = rt.block_on(
+                                    crate::capture::screen::ocr_window_by_pid(cur.pid),
+                                ) {
                                     text = crate::redact::redact(&t);
                                 }
                             }
