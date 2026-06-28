@@ -55,6 +55,65 @@ pub fn browser_url(_app_name: &str) -> Option<String> {
     None
 }
 
+/// É um navegador? (lista ampla — inclui os NÃO-scriptáveis tipo Opera GX, pra
+/// decidir se vale tentar o fallback de URL por Acessibilidade.) Case-insensitive.
+pub fn is_browser(app_name: &str) -> bool {
+    let n = app_name.to_lowercase();
+    [
+        "chrome", "chromium", "brave", "edge", "arc", "vivaldi", "opera", "opera gx",
+        "safari", "firefox", "zen", "orion", "duckduckgo",
+    ]
+    .iter()
+    .any(|b| n.contains(b))
+}
+
+/// Tira o LIXO que o Chrome enfia no título da janela: o aviso "Uso elevado da
+/// memória em…", o "(NN)" de contador, o ": 1,2 GB" de memória, o "- Reprodução
+/// de áudio" e o sufixo "- Google Chrome: perfil". Sobra o nome real da página
+/// (o vídeo, a busca, o artigo) — o que faz a captura PARECER (e ser) inteligente.
+pub fn clean_browser_title(title: &str) -> String {
+    use std::sync::OnceLock;
+    static MEM: OnceLock<regex::Regex> = OnceLock::new();
+    static COUNT: OnceLock<regex::Regex> = OnceLock::new();
+    let mem = MEM.get_or_init(|| regex::Regex::new(r":\s*[\d.,]+\s*(GB|MB)").unwrap());
+    let count = COUNT.get_or_init(|| regex::Regex::new(r"^\(\d+\)\s*").unwrap());
+
+    let mut t = title.to_string();
+    // 1) corta o sufixo do navegador (e o ": perfil" que vem depois).
+    for b in [
+        " - Google Chrome",
+        " — Google Chrome",
+        " - Chromium",
+        " - Microsoft Edge",
+        " - Opera",
+        " - Brave",
+    ] {
+        if let Some(i) = t.find(b) {
+            t.truncate(i);
+            break;
+        }
+    }
+    // 2) remove decoradores do Chrome.
+    t = t.replace(" - Reprodução de áudio", "");
+    t = mem.replace_all(&t, "").into_owned();
+    // 3) prefixos de aviso de memória.
+    for p in ["Uso elevado da memória em ", "Uso da memória em "] {
+        if let Some(rest) = t.strip_prefix(p) {
+            t = rest.to_string();
+        }
+    }
+    // 4) contador "(NN) " no começo.
+    t = count.replace(&t, "").into_owned();
+    t.trim().to_string()
+}
+
+/// O texto lido pela AX é só a MOLDURA do Chrome (barra de abas/botões), não a
+/// página? O Chrome esconde o conteúdo web da Acessibilidade, então quando o texto
+/// tem essas marcas, sabemos que NÃO é o conteúdo da página — vale acionar o OCR.
+pub fn is_chrome_frame(text: &str) -> bool {
+    text.contains(" - Google Chrome") || text.contains("Pesquisa em todas as guias")
+}
+
 /// URL "limpa" pro título: descarta query (`?`) e fragment (`#`), que costumam
 /// carregar tokens/PII (reset token, access_token de OAuth, `?email=`, session id).
 /// Preserva scheme + host + path (contexto útil tipo `/watch`, `/r/rust`).
@@ -237,5 +296,36 @@ mod tests {
     fn empty_url_returns_none() {
         assert_eq!(site_name(""), None);
         assert_eq!(site_name("https://"), None);
+    }
+
+    #[test]
+    fn limpa_lixo_do_titulo_do_chrome() {
+        assert_eq!(
+            clean_browser_title(
+                "Uso elevado da memória em (143) NÃO FAZ SENTIDO O HENRY DANGER - YouTube - Reprodução de áudio: 1,3 GB - Google Chrome: petrus"
+            ),
+            "NÃO FAZ SENTIDO O HENRY DANGER - YouTube"
+        );
+        assert_eq!(
+            clean_browser_title("Uso elevado da memória em (18) WhatsApp: 1,2 GB - Google Chrome: petrus"),
+            "WhatsApp"
+        );
+        // título já limpo (en-dash não é separador) passa intacto, sem o sufixo.
+        assert_eq!(
+            clean_browser_title("Café – Wikipédia, a enciclopédia livre - Google Chrome: petrus"),
+            "Café – Wikipédia, a enciclopédia livre"
+        );
+    }
+
+    #[test]
+    fn is_browser_pega_opera_gx_e_outros() {
+        assert!(is_browser("Opera GX"));
+        assert!(is_browser("Google Chrome"));
+        assert!(is_browser("Safari"));
+        assert!(is_browser("Firefox"));
+        assert!(is_browser("Arc"));
+        assert!(!is_browser("Notepad"));
+        assert!(!is_browser("Slack"));
+        assert!(!is_browser("Visual Studio Code"));
     }
 }

@@ -21,6 +21,19 @@ pub fn focused_text(_pid: i32) -> Option<String> {
     None
 }
 
+/// URL da aba ativa lida pela Acessibilidade — fallback do AppleScript pra
+/// navegadores não-scriptáveis (Opera GX). macOS só; outros SOs retornam None
+/// (no Windows o caminho é a UI Automation, ainda por vir).
+#[cfg(target_os = "macos")]
+pub fn browser_url_ax(pid: i32) -> Option<String> {
+    macos::focused_browser_url(pid)
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn browser_url_ax(_pid: i32) -> Option<String> {
+    None
+}
+
 /// Abstração de captura da janela em foco. Mantém o resto do app independente
 /// da crate concreta usada por baixo — dá pra trocar por uma implementação
 /// nativa sem mexer no sampler nem nos commands.

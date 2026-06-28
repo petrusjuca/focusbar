@@ -169,12 +169,21 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
 
                 // Abre a nova (resolve site + URL aqui, uma vez por troca).
                 if let Some(w) = win.as_ref() {
-                    let url = browser::browser_url(&w.app_name);
+                    // AppleScript pros navegadores scriptáveis; se falhar e for um
+                    // navegador (ex.: Opera GX, sem AppleScript), lê a URL da barra
+                    // de endereço pela Acessibilidade.
+                    let url = browser::browser_url(&w.app_name).or_else(|| {
+                        if browser::is_browser(&w.app_name) {
+                            crate::capture::browser_url_ax(w.pid)
+                        } else {
+                            None
+                        }
+                    });
                     let (label_app, stored_title, bundle) = match &url {
                         Some(u) => (
                             browser::site_label(u).unwrap_or_else(|| w.app_name.clone()),
-                            // URL limpa: sem query/fragment (onde vivem tokens/PII).
-                            format!("{} — {}", w.title, browser::clean_url(u)),
+                            // Título sem o lixo do Chrome + URL limpa (sem query/fragment).
+                            format!("{} — {}", browser::clean_browser_title(&w.title), browser::clean_url(u)),
                             String::new(), // site agrupa independente do navegador
                         ),
                         None => (
@@ -219,7 +228,14 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
                     let mut text = crate::capture::focused_text(cur.pid)
                         .map(|t| crate::redact::redact(&t))
                         .unwrap_or_default();
-                    if content_is_weak(&text) {
+                    // Chrome esconde a página da AX → só veio a moldura. Começa do
+                    // título LIMPO (= o nome da página: vídeo, busca, artigo) como
+                    // base confiável, e força o OCR pra ler o corpo de verdade.
+                    let chrome_frame = crate::capture::browser::is_chrome_frame(&text);
+                    if chrome_frame {
+                        text = crate::capture::browser::clean_browser_title(&cur.raw_title);
+                    }
+                    if chrome_frame || content_is_weak(&text) {
                         let ocr_on = db
                             .lock()
                             .ok()
