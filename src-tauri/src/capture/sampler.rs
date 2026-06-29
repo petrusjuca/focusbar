@@ -243,7 +243,11 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
                             .flatten()
                             .map(|v| v == "1")
                             .unwrap_or(false);
-                        if ocr_on && crate::capture::screen::screen_recording_granted() {
+                        // NÃO confia no preflight de permissão (no macOS ele mente —
+                        // retorna "negado" mesmo concedido). Só TENTA o OCR: se há
+                        // permissão, funciona; se não, a captura falha sozinha e cai
+                        // no título limpo. É o que o screenpipe faz: tenta sempre.
+                        if ocr_on {
                             if let Some(rt) = ocr_rt.as_ref() {
                                 // Captura pela janela do PID DESTA sessão (cur.pid),
                                 // não "a em foco agora" — o block_on leva segundos e

@@ -140,6 +140,33 @@ pub fn run() {
 
             // Sobe o sampler de foco e o scheduler de lembretes em background.
             capture::sampler::spawn(app.handle().clone(), db.clone(), paused);
+
+            // Auto-teste de OCR: 8s após abrir, OCRa a PRÓPRIA janela uma vez e
+            // grava o resultado em settings (ocr_selftest). Diz a VERDADE sobre se o
+            // OCR captura a tela nesta máquina — sem depender de foco nem do preflight
+            // de permissão (que no macOS mente). Guarda também o que o preflight diz,
+            // pra flagrar o falso-negativo.
+            {
+                let db_t = db.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_secs(8));
+                    let pid = std::process::id() as i32;
+                    let own = tokio::runtime::Builder::new_multi_thread()
+                        .worker_threads(1)
+                        .enable_all()
+                        .build()
+                        .ok()
+                        .and_then(|rt| rt.block_on(capture::screen::ocr_window_by_pid(pid)));
+                    let val = match own {
+                        Some(t) => format!("ok:{}", t.chars().count()),
+                        None => "falhou".to_string(),
+                    };
+                    if let Ok(c) = db_t.lock() {
+                        let _ = db::set_setting(&c, "ocr_selftest", &val);
+                    }
+                });
+            }
+
             reminders::scheduler::spawn(app.handle().clone(), db);
 
             // Ícone na barra de menu (tray) com menu Abrir / Pausar / Sair.

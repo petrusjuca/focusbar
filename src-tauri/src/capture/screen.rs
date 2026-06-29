@@ -40,6 +40,7 @@ pub fn screen_recording_granted() -> bool {
     perm::granted()
 }
 
+
 pub fn request_screen_recording() -> bool {
     perm::request()
 }
@@ -69,12 +70,9 @@ pub fn capture_window_by_pid(pid: i32) -> Option<image::RgbaImage> {
     fallback.and_then(|w| w.capture_image().ok())
 }
 
-/// OCR da janela do processo `pid` (Estágio 2). Captura SÓ aquela janela e roda o
-/// OCR NATIVO do SO (Apple Vision no Mac, Windows OCR no Win) em MEMÓRIA — a
-/// imagem nunca toca o disco. Devolve o texto lido. Best-effort; precisa de
-/// permissão de Gravação de Tela. O chamador deve passar o texto pelo porteiro.
-pub async fn ocr_window_by_pid(pid: i32) -> Option<String> {
-    let rgba = capture_window_by_pid(pid)?;
+/// OCR nativo (Apple Vision / Windows OCR) de uma imagem em MEMÓRIA — nunca toca
+/// o disco. Devolve o texto, ou None se vazio.
+async fn ocr_image(rgba: image::RgbaImage) -> Option<String> {
     let img = image::DynamicImage::ImageRgba8(rgba);
     let engine = uni_ocr::OcrEngine::new(uni_ocr::OcrProvider::Auto)
         .ok()?
@@ -89,7 +87,27 @@ pub async fn ocr_window_by_pid(pid: i32) -> Option<String> {
     if text.is_empty() {
         None
     } else {
-        // Corta pra não estourar o contexto do modelo local.
         Some(text.chars().take(900).collect())
     }
+}
+
+/// Captura pra OCR, ROBUSTA. Tenta só a janela do pid (privacidade); se o `xcap`
+/// falhar em listá-la (a enumeração de janelas dele é INTERMITENTE — às vezes
+/// devolve 2 janelas, às vezes 19), cai pra captura da TELA CHEIA, que é confiável.
+/// Como o OCR roda enquanto a janela da sessão está em foco, a tela é dominada por
+/// ela. A imagem nunca toca o disco e o texto passa pelo porteiro (redact) depois.
+fn capture_for_ocr(pid: i32) -> Option<image::RgbaImage> {
+    if let Some(img) = capture_window_by_pid(pid) {
+        return Some(img);
+    }
+    // Fallback confiável: monitor principal.
+    let monitors = xcap::Monitor::all().ok()?;
+    monitors.into_iter().next().and_then(|m| m.capture_image().ok())
+}
+
+/// OCR da janela do processo `pid` (Estágio 2), com fallback de tela cheia. A
+/// imagem nunca toca o disco. Best-effort; o chamador passa o texto pelo porteiro.
+pub async fn ocr_window_by_pid(pid: i32) -> Option<String> {
+    let rgba = capture_for_ocr(pid)?;
+    ocr_image(rgba).await
 }
