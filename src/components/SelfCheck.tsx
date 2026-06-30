@@ -9,20 +9,25 @@ export function SelfCheck() {
   const [ax, setAx] = useState<boolean | null>(null);
   const [screen, setScreen] = useState(false);
   const [ocrOn, setOcrOn] = useState(false);
+  const [ocrWorks, setOcrWorks] = useState<boolean | null>(null);
   const [ai, setAi] = useState<AiStatus | null>(null);
 
   async function refresh() {
     try {
-      const [a, s, o, st] = await Promise.all([
+      const [a, s, o, st, sel] = await Promise.all([
         invoke<boolean>("check_accessibility"),
         invoke<boolean>("check_screen_recording"),
         invoke<boolean>("get_ocr_enabled"),
         invoke<AiStatus>("ai_status"),
+        // Health-check REAL: o app OCRa a própria tela no startup e grava o
+        // resultado. "ok:N" = leu de verdade; "falhou" = capturou vazio.
+        invoke<string | null>("get_setting", { key: "ocr_selftest" }),
       ]);
       setAx(a);
       setScreen(s);
       setOcrOn(o);
       setAi(st);
+      setOcrWorks(sel == null ? null : sel.startsWith("ok:"));
     } catch {
       /* ignore */
     }
@@ -44,10 +49,14 @@ export function SelfCheck() {
       fix: () => invoke("request_accessibility"),
     },
     {
-      // OCR desligado de propósito = ok; ligado sem permissão = problema.
-      ok: !ocrOn || screen,
-      label: "visão profunda (OCR)",
-      hint: "OCR ligado mas sem Gravação de Tela. Clique pra conceder (reabra o app depois).",
+      // Verifica de VERDADE: o health-check leu a tela? OCR desligado = ok.
+      // Ligado: ok a menos que o teste tenha FALHADO (ocrWorks===false). Null
+      // (ainda não testou) não alarma.
+      ok: !ocrOn || ocrWorks !== false,
+      label: "visão profunda (OCR lê a tela)",
+      hint: screen
+        ? "OCR ligado mas não consegui LER a tela no último teste. Vá em Assistente → OLHOS → 'Testar os olhos agora'."
+        : "OCR ligado mas sem Gravação de Tela. Clique pra conceder (reabra o app depois).",
       fix: () => invoke("request_screen_recording"),
     },
     {
