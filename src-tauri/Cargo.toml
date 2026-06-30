@@ -61,5 +61,9 @@ windows = { version = "0.62", features = [
     "Win32_System_Variant",
     "Win32_System_StationsAndDesktops",
     "Win32_Security",
+    # Leitura de conteúdo da janela em foco via UI Automation (equivalente Windows
+    # da Acessibilidade do Mac) + a janela em primeiro plano.
+    "Win32_UI_Accessibility",
+    "Win32_UI_WindowsAndMessaging",
 ] }
 

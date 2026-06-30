@@ -3,6 +3,9 @@ use crate::models::ActiveWindow;
 #[cfg(target_os = "macos")]
 mod macos;
 
+#[cfg(target_os = "windows")]
+mod windows_uia;
+
 pub mod browser;
 pub mod sampler;
 pub mod screen;
@@ -16,7 +19,12 @@ pub fn focused_text(pid: i32) -> Option<String> {
     macos::focused_window_text(pid)
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
+pub fn focused_text(pid: i32) -> Option<String> {
+    windows_uia::focused_window_text(pid)
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn focused_text(_pid: i32) -> Option<String> {
     None
 }

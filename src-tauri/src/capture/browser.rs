@@ -107,11 +107,18 @@ pub fn clean_browser_title(title: &str) -> String {
     t.trim().to_string()
 }
 
-/// O texto lido pela AX é só a MOLDURA do Chrome (barra de abas/botões), não a
-/// página? O Chrome esconde o conteúdo web da Acessibilidade, então quando o texto
-/// tem essas marcas, sabemos que NÃO é o conteúdo da página — vale acionar o OCR.
+/// O texto lido pela Acessibilidade é só a MOLDURA do Chrome (barra de abas/botões),
+/// não a página? Só faz sentido no macOS, onde o Chrome ESCONDE o conteúdo web da AX
+/// — aí caímos no título limpo + OCR. No Windows a UIA já traz o corpo da página,
+/// então nunca descartamos (retorna false).
+#[cfg(target_os = "macos")]
 pub fn is_chrome_frame(text: &str) -> bool {
     text.contains(" - Google Chrome") || text.contains("Pesquisa em todas as guias")
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn is_chrome_frame(_text: &str) -> bool {
+    false
 }
 
 /// URL "limpa" pro título: descarta query (`?`) e fragment (`#`), que costumam
