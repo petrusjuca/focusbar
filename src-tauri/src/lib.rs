@@ -21,7 +21,7 @@ use commands::assistant::{
 };
 use commands::config::{
     categorize_pending, get_focus_time, get_mcp_info, get_ocr_enabled, get_setting,
-    log_focus_time, log_pomodoro, set_ocr_enabled, set_setting,
+    log_focus_time, log_pomodoro, run_ocr_selftest, set_ocr_enabled, set_setting,
 };
 use commands::focus::{check_focus, get_focus, set_focus, set_focus_judgment};
 use commands::notes::{add_note, delete_note, list_notes};
@@ -262,6 +262,7 @@ pub fn run() {
             set_focus_judgment,
             get_ocr_enabled,
             set_ocr_enabled,
+            run_ocr_selftest,
             get_mcp_info,
             get_setting,
             set_setting,

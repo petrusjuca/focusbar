@@ -72,6 +72,32 @@ pub fn set_ocr_enabled(state: State<AppState>, on: bool) -> Result<(), String> {
     db::set_setting(&conn, "ocr_enabled", if on { "1" } else { "0" }).map_err(|e| e.to_string())
 }
 
+/// "Testar os olhos AGORA": captura a tela cheia, roda o OCR e devolve o texto
+/// (redigido) — PROVA, na hora, que o screenshot+OCR estão funcionando nesta
+/// máquina. A imagem é em memória, nunca salva. Retorna o texto lido ou erro.
+#[tauri::command]
+pub async fn run_ocr_selftest() -> Result<String, String> {
+    let text = tauri::async_runtime::spawn_blocking(|| {
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .ok()?;
+        rt.block_on(crate::capture::screen::ocr_primary_monitor())
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+
+    match text {
+        Some(t) => {
+            // passa pelo porteiro (redige senha/CPF/cartão) antes de mostrar.
+            let red = crate::redact::redact(&t);
+            Ok(red.chars().take(400).collect::<String>())
+        }
+        None => Err("Não capturou — confira a permissão de Gravação de Tela.".into()),
+    }
+}
+
 /// Caminho do servidor MCP local (binário `mcp` ao lado do app) e se ele existe.
 /// O front monta o comando do Claude a partir disso. É o "Claude lê seus dados
 /// sem API": você aponta o seu Claude pro servidor, que lê o SQLite local.

@@ -13,6 +13,21 @@ export function OcrSettings() {
   const [granted, setGranted] = useState(true);
   const [msg, setMsg] = useState("");
   const [err, setErr] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function testEyes() {
+    setTesting(true);
+    setTestResult(null);
+    try {
+      const txt = await invoke<string>("run_ocr_selftest");
+      setTestResult({ ok: true, text: txt });
+    } catch (e) {
+      setTestResult({ ok: false, text: friendlyError(e) });
+    } finally {
+      setTesting(false);
+    }
+  }
 
   useEffect(() => {
     invoke<boolean>("get_ocr_enabled").then(setEnabled).catch(() => {});
@@ -56,6 +71,37 @@ export function OcrSettings() {
         <input type="checkbox" checked={enabled} onChange={toggle} />
         Ligar OCR de tela
       </label>
+
+      <div style={{ marginTop: "0.7rem" }}>
+        <button className="link-btn" onClick={testEyes} disabled={testing}>
+          {testing ? "🔍 capturando + lendo…" : "🔍 Testar os olhos agora"}
+        </button>
+        {testResult && (
+          <div
+            className="ai-card-text"
+            style={{
+              marginTop: "0.5rem",
+              padding: "0.5rem 0.6rem",
+              borderRadius: 8,
+              background: "rgba(127,127,127,0.12)",
+              color: testResult.ok ? "inherit" : "var(--warn)",
+            }}
+          >
+            {testResult.ok ? (
+              <>
+                <b>✓ Funcionando.</b> Li {testResult.text.length} caracteres da tela
+                agora:
+                <br />
+                <span style={{ opacity: 0.8, fontStyle: "italic" }}>
+                  "{testResult.text.slice(0, 180)}…"
+                </span>
+              </>
+            ) : (
+              <>✗ {testResult.text}</>
+            )}
+          </div>
+        )}
+      </div>
       {enabled && !granted && (
         <p className="perm-hint" style={{ color: "var(--warn)" }}>
           ⚠️ Falta a permissão de Gravação de Tela — conceda e reinicie o app.

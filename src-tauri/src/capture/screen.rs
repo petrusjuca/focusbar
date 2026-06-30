@@ -127,3 +127,11 @@ pub async fn ocr_window_by_pid(pid: i32) -> Option<String> {
     let rgba = capture_for_ocr(pid)?;
     ocr_image(rgba).await
 }
+
+/// OCR da TELA CHEIA (monitor principal) — pro botão "testar os olhos": prova,
+/// na hora, que o screenshot+OCR estão vivos nesta máquina. Imagem em memória.
+pub async fn ocr_primary_monitor() -> Option<String> {
+    let monitors = xcap::Monitor::all().ok()?;
+    let img = monitors.into_iter().next()?.capture_image().ok()?;
+    ocr_image(img).await
+}
