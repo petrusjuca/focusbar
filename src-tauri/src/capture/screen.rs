@@ -97,12 +97,28 @@ async fn ocr_image(rgba: image::RgbaImage) -> Option<String> {
 /// Como o OCR roda enquanto a janela da sessão está em foco, a tela é dominada por
 /// ela. A imagem nunca toca o disco e o texto passa pelo porteiro (redact) depois.
 fn capture_for_ocr(pid: i32) -> Option<image::RgbaImage> {
+    // Tenta a janela do pid; o xcap é intermitente, então tenta de novo uma vez.
     if let Some(img) = capture_window_by_pid(pid) {
         return Some(img);
     }
-    // Fallback confiável: monitor principal.
+    if let Some(img) = capture_window_by_pid(pid) {
+        return Some(img);
+    }
+    // Fallback de tela cheia SÓ se a janela em foco AINDA é a da sessão. Senão a
+    // tela mostra outra janela e o conteúdo seria atribuído à sessão ERRADA
+    // (ex.: conteúdo do Claude numa sessão de YouTube). Honestidade > cobertura.
+    if current_focused_pid() != Some(pid) {
+        return None;
+    }
     let monitors = xcap::Monitor::all().ok()?;
     monitors.into_iter().next().and_then(|m| m.capture_image().ok())
+}
+
+/// PID do app atualmente em foco (pra validar o fallback de tela cheia).
+fn current_focused_pid() -> Option<i32> {
+    active_win_pos_rs::get_active_window()
+        .ok()
+        .map(|w| w.process_id as i32)
 }
 
 /// OCR da janela do processo `pid` (Estágio 2), com fallback de tela cheia. A
