@@ -16,9 +16,11 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # Universal: roda em Mac Intel (x86_64) E Apple Silicon (aarch64).
+          # Mac NATIVO (Apple Silicon). O build universal quebrava: o Tauri
+          # auto-empacota o 2º binário (mcp) mas não fazia o lipo dele. No nativo
+          # o `cargo build` já gera target/release/mcp e o bundle funciona.
           - platform: macos-latest
-            args: "--target universal-apple-darwin"
+            args: ""
           - platform: windows-latest
             args: ""
     runs-on: ${{ matrix.platform }}
