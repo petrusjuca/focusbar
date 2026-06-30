@@ -19,7 +19,9 @@ use tauri::{AppHandle, Emitter};
 const POLL_SECS: u64 = 1;
 const MIN_SESSION_SECS: i64 = 2;
 const IDLE_THRESHOLD_SECS: i64 = 120;
-const CONTENT_DELAY: i64 = 5; // captura o conteúdo só após a sessão estabilizar (s)
+const CONTENT_DELAY: i64 = 2; // lê o conteúdo cedo (2s): enquanto a janela ainda
+                              // está em foco → o fallback de tela cheia casa e pega
+                              // o CORPO da página com mais frequência (não só o título)
 
 /// Texto da janela fraco demais pra categorizar? (curto ou poucas palavras) →
 /// vale acionar o OCR de pixel.
