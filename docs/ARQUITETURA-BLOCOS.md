@@ -11,7 +11,7 @@
 |---|---|---|
 | 1.1 Janela em foco | ✅ | Polling 1s (`active-win-pos-rs`). Captura por EVENTO ainda não (⬜) — polling funciona, evento é otimização |
 | 1.2 URL do browser (Mac) | ✅ | AppleScript (Chrome/Safari/Edge/Brave/Arc/Vivaldi/Opera) + fallback por Acessibilidade pro Opera GX (🟠 em teste) |
-| 1.3 URL do browser (Windows) | ⬜ | **Maior buraco atual** — no Win não isola a URL, então não separa sites (Revisão4 #1) |
+| 1.3 URL do browser (Windows) | 🟠 | Fase A (v0.5.0): extensão própria → endpoint local → sampler. Falta validar no Windows/Opera GX do João |
 | 1.4 Conteúdo da tela (Mac) | ✅ | Árvore de Acessibilidade + `AXManualAccessibility` (destrava Electron: Claude, Ollama, Code) + mira AXWebArea |
 | 1.5 Conteúdo da tela (Windows) | 🟠 | UI Automation implementado; compila, **runtime a validar pelo chefe** (v0.4.0) |
 | 1.6 OCR (fallback de pixel) | ✅ | xcap por janela → fallback tela cheia GUARDADO por pid (não atribui à sessão errada). Health-check no startup + botão "Testar os olhos". Imagem **em memória, nunca salva** |
@@ -20,7 +20,7 @@
 | 1.9 Presença: tela bloqueada | ✅ | CGSession (Mac) + input desktop (Win) |
 | 1.10 Porteiro (PII) | ✅ | `redact.rs`: senha/CPF/cartão/token (32+ chars) + zonas de exclusão (banco/senha nunca capturados) |
 | 1.11 Título limpo | ✅ | Remove o lixo do Chrome ("Uso elevado da memória… 1,2 GB - Google Chrome: perfil") |
-| 1.12 Extensão de browser (tab_id, aba fechada, foco×fundo) | ⬜ | Não existe. **ActivityWatch já tem isso pronto** — ver estratégia no fim |
+| 1.12 Extensão de browser (tab_id, aba fechada, foco×fundo) | ✅ | Fase A (v0.5.0): MV3 própria em `extension/`, só permissão `tabs`, só 127.0.0.1. Aba fechada registrada. Falta: `audible` no payload (roubar do AW) |
 | 1.13 Áudio/microfone/Whisper | ⬜ | Por design (privacidade/peso). screenpipe tem |
 
 ## CAMADA 2 — ARMAZENAMENTO (a memória)
@@ -31,7 +31,7 @@
 | 2.2 `interval_markers` (pausado/ausente) | ✅ | Todo minuto tem dono |
 | 2.3 `pomodoro_log` | ✅ | goal, início, planejado, real, cumpriu? |
 | 2.4 `todos` / `notes`(intenção) / `settings` | ✅ | |
-| 2.5 Tabela BRUTA separada (re-derivável) | ⬜ | Só existe a de sessões; blocos são derivados em memória |
+| 2.5 Tabela BRUTA separada (re-derivável) | 🟠 | `tab_events` (v0.5.0) é o embrião: eventos crus de aba com retenção 90d. Falta generalizar pra eventos de janela/estado (fase do derivador) |
 | 2.6 Screenshots salvos em disco | 🔵 | **HOJE NÃO SALVA (por privacidade)**. Revisão4 #16 pede pra salvar (estilo screenpipe). DECISÃO DE PRODUTO — trade-off privacidade × análise posterior |
 
 ## CAMADA 3 — ENTENDIMENTO (o cérebro)
@@ -128,13 +128,13 @@
 
 | # | Item | Status |
 |---|---|---|
-| 1 | Opera GX mostra browser, não sites (Win) | ⬜ URL no Win não existe — prioridade nº 1 |
+| 1 | Opera GX mostra browser, não sites (Win) | 🟠 Fase A entregue (v0.5.0: extensão própria + endpoint 127.0.0.1:7690) — falta validar no Windows/Opera GX do João |
 | 2 | MCP no Claude Code | ✅ validado |
 | 3 | UI do timer 1:1 Google | ⬜ |
 | 4 | Mostra duração real após acabar | ✅ |
 | 5 | Pomodoros pré-prontos por tarefa (estimativa 🍅) | ⬜ ideia nova |
 | 6 | BUG: intenção definida some/repergunta | 🟠 investigar |
-| 7/8 | Repensar "focar agora" manual + "checar agora" inútil | 🔵 decisão UX |
+| 7/8 | Repensar "focar agora" manual + "checar agora" inútil | 🟠 "checar agora" consertado (v0.5.2: julga o último app REAL, não o focusbar); repensar "focar agora" segue aberto |
 | 9 | +5min conta no mesmo pomodoro? | ✅ SIM — estica o mesmo bloco e conta no tempo real |
 | 10 | Ajustar/renomear timer em andamento | ⬜ |
 | 11 | Pomodoro neutro | 🟠 dá sem foco definido; UX confusa |
@@ -146,4 +146,62 @@
 | 17 | Diferença entre os modos | 🟠 documentado acima; refinar |
 | 18 | Cores da timeline | ⬜ ajustar |
 | 19 | Deletar "Analisar no Claude web" pós-MCP | 🔵 pendente |
-| 20 | Acesso ao navegador (extensão) | ⬜ ver estratégia híbrida |
+| 20 | Acesso ao navegador (extensão) | ✅ extensão PRÓPRIA MV3 (`extension/`, v0.5.0) — só `tabs`, só loopback |
+
+---
+
+# Pesquisa 02.07.2026 — o que roubar do screenpipe v2 e do ActivityWatch
+
+Pesquisa profunda nos dois projetos (código-fonte, docs, issues 2025-2026), feita
+depois da Fase A. Duas validações grandes antes da lista:
+
+- **O screenpipe ABANDONOU a captura contínua.** A v2 deles (2025-26) é
+  event-driven + accessibility-first, OCR só como fallback — exatamente a
+  arquitetura do focusbar. O "grava tudo sempre" morreu de RAM (issues de
+  10GB+/OOM). Nossa decisão de OCR efêmero só da janela em foco está certa.
+- **O ActivityWatch confirma o desenho da tabela bruta**: event log cru +
+  derivação na leitura (nada de gravar categoria no evento). E o AW está
+  migrando o manager pra **Tauri** (aw-tauri) — mesma stack nossa.
+
+## Roubar do ActivityWatch (em ordem)
+
+1. **Heartbeat + merge por dado idêntico (pulsetime)** — o watcher nunca "abre/
+   fecha" sessão; manda estado pontual e o CORE funde eventos adjacentes iguais
+   dentro de uma janela (`pulsetime ≈ intervalo + folga`). Mata a classe inteira
+   de bug "sessão órfã de 9h" (crash/sleep/kill). É o miolo da fase do derivador.
+2. **Double-heartbeat na transição** — na troca, manda o dado ANTIGO em t-1ms e
+   o novo em t: fecha o período anterior com precisão de troca de aba, sem estado.
+3. **`audible` no payload da extensão** (`tab.audible` do Chrome) — a forma
+   barata de não perder "assistindo vídeo sem tocar no mouse": une audible com
+   not-afk na derivação. Encaixa direto no nosso estado Passive.
+4. **Browser = fonte de CONTEÚDO; OS = fonte de verdade sobre FOCO/TEMPO** —
+   a extensão MV3 mente sobre foco (nem sabe). Casar por interseção de períodos
+   com a janela ativa. (O tab_feed da Fase A já faz isso — validado.)
+5. **AFK datado retroativamente do último input real**, não de quando o timeout
+   estourou. (Nosso open_marker já recua pro último input — validado.)
+6. **NÃO copiar do AW:** (a) guardar bruto pra sempre sem agregado materializado
+   — dashboards deles ficam lentos com 1-2 anos de dado; nós temos daily_rollups,
+   manter e ampliar; (b) casar extensão↔janela por lista hardcoded de nomes de
+   browser (manutenção eterna) — nosso matching por token + título já é melhor.
+
+## Roubar do screenpipe v2 (em ordem)
+
+1. **Escada de intervalos por atividade** — polling não precisa ser fixo em 1s:
+   input recente → rápido; idle curto → 1s; idle fundo → 2s+. Menos bateria.
+2. **Perfis de energia** — na bateria, intervalos 2×; bateria ≤20%, desligar o
+   trabalho pesado (OCR); ≤10%, pausar captura (app continua vivo).
+3. **Trabalho pesado só quando o CPU está ocioso** — adiar OCR/sumarização até
+   o CPU ficar N segundos abaixo de um threshold (não OCRar durante uma call).
+4. **Filtro de privacidade NA ENTRADA** (não pós-filtro): domínio bloqueado não
+   gera nem evento (match por boundary de domínio: `chase` casa chase.com, não
+   purchase.com). Nossas zonas de exclusão já fazem isso pra apps; estender a
+   domínios da extensão.
+5. **Retenção em camadas ("Lean")** — apagar o payload pesado velho mantendo o
+   texto derivado pesquisável. Nosso purge de 90d do tab_events é o embrião.
+6. **Anti-armadilha:** backoff exponencial + circuit breaker em QUALQUER loop de
+   retry/monitor (o leak de 2.7GB/h deles em 2026 foi um loop de recovery de
+   áudio sem backoff).
+7. **Produto:** as features que os usuários deles realmente usam são recap do
+   dia, standup automático, breakdown de tempo e nudge de distração — todas já
+   no nosso roadmap (MCP fim do dia, insights, coach). Nenhum dos dois tem
+   pomodoro/intenção — segue sendo NOSSO diferencial.
