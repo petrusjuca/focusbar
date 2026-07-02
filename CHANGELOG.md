@@ -1,5 +1,12 @@
 # focusbar — o que mudou
 
+## v0.5.1 — o juiz de foco não cita mais o lixo do Chrome
+- O agente de foco julgava (e citava como "evidência") o aviso que o Chrome
+  enfia no título da janela — "**Uso elevado da memória**", contador "(NN)",
+  memória em GB. Agora o juiz recebe o **título limpo** (mesma limpeza que o
+  histórico já usava) e, quando a Acessibilidade só devolve a moldura do
+  Chrome, cai pro título limpo + OCR em vez de julgar a barra de abas.
+
 ## v0.5.0 — extensão de browser (Fase A do roadmap)
 - **Sites de verdade em QUALQUER navegador:** nova extensão (pasta `extension/`,
   instala descompactada no Opera GX/Chrome/Edge) reporta a aba ativa ao focusbar

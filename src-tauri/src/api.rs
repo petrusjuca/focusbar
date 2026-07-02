@@ -38,7 +38,13 @@ struct TabEvent {
 /// Valida e limpa o corpo do POST /api/tab-event. Pura — testável sem servidor.
 fn parse_tab_event(body: &str) -> Option<TabEvent> {
     let v: serde_json::Value = serde_json::from_str(body).ok()?;
-    let get = |k: &str| v.get(k).and_then(|x| x.as_str()).unwrap_or("").trim().to_string();
+    let get = |k: &str| {
+        v.get(k)
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    };
     let action = get("action");
     if !matches!(action.as_str(), "activated" | "updated" | "removed") {
         return None;
@@ -48,7 +54,11 @@ fn parse_tab_event(body: &str) -> Option<TabEvent> {
         action,
         browser: get("browser").to_lowercase(),
         tab_id: get("tab_id"),
-        url: if raw_url.is_empty() { String::new() } else { browser::clean_url(&raw_url) },
+        url: if raw_url.is_empty() {
+            String::new()
+        } else {
+            browser::clean_url(&raw_url)
+        },
         title: get("title"),
     })
 }
@@ -70,67 +80,82 @@ pub fn spawn(db: Arc<Mutex<Connection>>, feed: Arc<TabFeed>) {
         let server = match Server::http(ADDR) {
             Ok(s) => s,
             Err(e) => {
-                eprintln!("focusbar: API local NÃO subiu em {ADDR} ({e}) — extensão de browser inativa");
+                eprintln!(
+                    "focusbar: API local NÃO subiu em {ADDR} ({e}) — extensão de browser inativa"
+                );
                 return;
             }
         };
-        for mut req in server.incoming_requests() {
-            let path = req.url().split('?').next().unwrap_or("").to_string();
-            let resp = match (req.method(), path.as_str()) {
-                // Preflight de CORS (fetch de página local de debug).
-                (Method::Options, _) => {
-                    let mut r = Response::from_string("").with_status_code(204);
-                    r.add_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap());
-                    r.add_header(
-                        Header::from_bytes("Access-Control-Allow-Headers", "Content-Type").unwrap(),
-                    );
-                    r.add_header(Header::from_bytes("Access-Control-Allow-Methods", "POST, GET").unwrap());
-                    r
-                }
-
-                (Method::Get, "/api/health") => json(
-                    format!(
-                        "{{\"ok\":true,\"version\":\"{}\",\"ext_last_event_ts\":{}}}",
-                        env!("CARGO_PKG_VERSION"),
-                        feed.last_event_ts()
-                    ),
-                    200,
-                ),
-
-                (Method::Post, "/api/tab-event") => {
-                    let mut body = String::new();
-                    let _ = req.as_reader().read_to_string(&mut body);
-                    match parse_tab_event(&body) {
-                        Some(ev) => {
-                            let now = now_ts();
-                            if ev.action == "removed" {
-                                feed.forget_tab(&ev.tab_id, now);
-                            } else {
-                                feed.record(TabInfo {
-                                    url: ev.url.clone(),
-                                    title: ev.title.clone(),
-                                    browser: ev.browser.clone(),
-                                    tab_id: ev.tab_id.clone(),
-                                    ts: now,
-                                });
-                            }
-                            if let Ok(conn) = db.lock() {
-                                let _ = db::append_tab_event(
-                                    &conn, now, &ev.browser, &ev.action, &ev.tab_id, &ev.url,
-                                    &ev.title,
-                                );
-                            }
-                            json("{\"ok\":true}".into(), 200)
-                        }
-                        None => json("{\"error\":\"json\"}".into(), 400),
-                    }
-                }
-
-                _ => json("{\"error\":\"rota\"}".into(), 404),
-            };
-            let _ = req.respond(resp);
-        }
+        serve_loop(server, db, feed);
     });
+}
+
+/// O loop do servidor, separado do bind — os testes sobem numa porta efêmera
+/// (a 7690 pode estar ocupada pelo focusbar REAL rodando na máquina).
+fn serve_loop(server: Server, db: Arc<Mutex<Connection>>, feed: Arc<TabFeed>) {
+    for mut req in server.incoming_requests() {
+        let path = req.url().split('?').next().unwrap_or("").to_string();
+        let resp = match (req.method(), path.as_str()) {
+            // Preflight de CORS (fetch de página local de debug).
+            (Method::Options, _) => {
+                let mut r = Response::from_string("").with_status_code(204);
+                r.add_header(Header::from_bytes("Access-Control-Allow-Origin", "*").unwrap());
+                r.add_header(
+                    Header::from_bytes("Access-Control-Allow-Headers", "Content-Type").unwrap(),
+                );
+                r.add_header(
+                    Header::from_bytes("Access-Control-Allow-Methods", "POST, GET").unwrap(),
+                );
+                r
+            }
+
+            (Method::Get, "/api/health") => json(
+                format!(
+                    "{{\"ok\":true,\"version\":\"{}\",\"ext_last_event_ts\":{}}}",
+                    env!("CARGO_PKG_VERSION"),
+                    feed.last_event_ts()
+                ),
+                200,
+            ),
+
+            (Method::Post, "/api/tab-event") => {
+                let mut body = String::new();
+                let _ = req.as_reader().read_to_string(&mut body);
+                match parse_tab_event(&body) {
+                    Some(ev) => {
+                        let now = now_ts();
+                        if ev.action == "removed" {
+                            feed.forget_tab(&ev.tab_id, now);
+                        } else {
+                            feed.record(TabInfo {
+                                url: ev.url.clone(),
+                                title: ev.title.clone(),
+                                browser: ev.browser.clone(),
+                                tab_id: ev.tab_id.clone(),
+                                ts: now,
+                            });
+                        }
+                        if let Ok(conn) = db.lock() {
+                            let _ = db::append_tab_event(
+                                &conn,
+                                now,
+                                &ev.browser,
+                                &ev.action,
+                                &ev.tab_id,
+                                &ev.url,
+                                &ev.title,
+                            );
+                        }
+                        json("{\"ok\":true}".into(), 200)
+                    }
+                    None => json("{\"error\":\"json\"}".into(), 400),
+                }
+            }
+
+            _ => json("{\"error\":\"rota\"}".into(), 404),
+        };
+        let _ = req.respond(resp);
+    }
 }
 
 #[cfg(test)]
@@ -171,12 +196,18 @@ mod tests {
         crate::db::migrate(&conn).unwrap();
         let db = Arc::new(Mutex::new(conn));
         let feed = Arc::new(TabFeed::new());
-        spawn(db.clone(), feed.clone());
-        // Espera a porta abrir (thread própria).
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        // Porta EFÊMERA: a 7690 pode estar ocupada pelo focusbar real rodando
+        // na máquina de quem executa os testes. O bind acontece antes da
+        // thread, então não há corrida — dá pra conectar já.
+        let server = Server::http("127.0.0.1:0").unwrap();
+        let addr = server.server_addr().to_string();
+        {
+            let (db, feed) = (db.clone(), feed.clone());
+            std::thread::spawn(move || serve_loop(server, db, feed));
+        }
 
         let post = |body: &str| {
-            let mut stream = std::net::TcpStream::connect(ADDR).unwrap();
+            let mut stream = std::net::TcpStream::connect(&addr).unwrap();
             use std::io::Write as _;
             write!(
                 stream,

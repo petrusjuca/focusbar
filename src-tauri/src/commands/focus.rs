@@ -1,4 +1,5 @@
 use crate::ai;
+use crate::capture::browser;
 use crate::capture::{ActiveWinProvider, WindowProvider};
 use crate::category::categorize;
 use crate::db;
@@ -121,7 +122,16 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
             if redact::is_excluded(&w.app_name, &w.title) {
                 return Ok(none("Sessão em zona de exclusão (não analisada)."));
             }
-            (w.app_name.clone(), redact::redact(&w.title), w.pid)
+            // Navegador: tira o LIXO do título ("Uso elevado da memória…",
+            // "(NN)", sufixo do browser) ANTES de julgar — senão a IA cita o
+            // aviso do Chrome como "evidência" do veredito. Mesma limpeza que
+            // o sampler já faz antes de gravar.
+            let title = if browser::is_browser(&w.app_name) {
+                browser::clean_browser_title(&w.title)
+            } else {
+                w.title.clone()
+            };
+            (w.app_name.clone(), redact::redact(&title), w.pid)
         }
         None => return Ok(none("Sem janela em foco.")),
     };
@@ -216,6 +226,13 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
     let mut extra = crate::capture::focused_text(pid)
         .map(|t| redact::redact(&t))
         .unwrap_or_default();
+
+    // Chrome esconde a página da AX → o texto lido é só a MOLDURA (barra de
+    // abas/avisos). Isso é ruído pro juiz: cai pro título limpo e deixa o
+    // OCR (abaixo) ler o corpo de verdade. Espelha o que o sampler faz.
+    if browser::is_chrome_frame(&extra) {
+        extra = title.clone();
+    }
 
     // "Olhos" Estágio 2 (OCR de pixel): só se a AX veio fraca/vazia, o OCR está
     // LIGADO e há permissão de Gravação de Tela. Lê o texto da janela em foco via
