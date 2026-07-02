@@ -186,12 +186,12 @@ Card flutuante sólido, 1 direção por vez: tarefa atual + timer + estado. Jane
 11. Nunca alertar fragmentação/troca de aba (TDAH — é o modo normal de trabalhar).
 12. Tauri universal build quebra com 2º binário → Mac nativo no CI, ou lipo manual.
 
-## 9. DECISÕES PENDENTES (Petrus + João decidem ANTES do código)
+## 9. DECISÕES ✅ TOMADAS (Petrus, 02.07.2026)
 
-- **D1 — Screenshots em disco?** (Revisão 4 #16 pede; v1 não salva por privacidade). Opções: (a) não salvar (só OCR efêmero — atual), (b) salvar com retenção curta (ex.: 24h, criptografado, pra "ver em que aba do Claude estava"), (c) salvar tudo (estilo screenpipe). Recomendação: (b) com toggle default-off.
-- **D2 — Ollama?** (Revisão 4 #12 pede tirar). Opções: (a) remover de vez (categorias = regra + correção + Claude/MCP no fim do dia), (b) opcional default-off. Recomendação: (a) — simplicidade; o MCP cobre a inteligência.
-- **D3 — Diário/nota rápida:** remover (#14)? Recomendação: sim, remover.
-- **D4 — Extensão:** própria (200 linhas, controle total) ou adaptar a do ActivityWatch? Recomendação: própria (mesmo esforço, sem dependência).
+- **D1 — Screenshots: SALVAR com retenção curta (24–48h).** Local, com auto-limpeza e toggle. Dá o "ver em que aba estava" sem virar arquivo eterno.
+- **D2 — Ollama: REMOVER de vez.** Categorização = regras + correção 1-clique + Claude via MCP no fim do dia. App leve.
+- **D3 — Diário/nota rápida: REMOVER.** Anotação vive fora do focusbar. A intenção do dia continua.
+- **D4 — Extensão de browser: PRÓPRIA.** MV3 mínima, fala só com 127.0.0.1.
 
 ## 10. PLANO DE CONSTRUÇÃO (fases com critério de aceite verificável)
 
