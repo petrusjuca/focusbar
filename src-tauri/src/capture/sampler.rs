@@ -47,6 +47,9 @@ struct OpenSession {
     pid: i32,
     content: Option<String>, // trecho REDIGIDO da tela (pra IA categorizar por conteúdo)
     content_done: bool,      // já capturamos o conteúdo desta sessão?
+    /// Linha desta sessão no banco (HEARTBEAT, Fase B): criada quando a sessão
+    /// se firma (>=2s) e estendida a cada batida. None = ainda curta demais.
+    row_id: Option<i64>,
 }
 
 fn now_ts() -> i64 {
@@ -169,24 +172,40 @@ pub fn spawn(
                 .map(|c| (c.raw_app.as_str(), c.raw_title.as_str()));
 
             if new_key != cur_key {
-                // Fecha a sessão anterior.
+                // Fecha a sessão anterior (fim exato; no idle, RECUA pro último input).
                 if let Some(prev) = current.take() {
                     let end = if is_idle {
                         (now - idle).max(prev.start_ts)
                     } else {
                         now
                     };
-                    if end - prev.start_ts >= MIN_SESSION_SECS {
-                        if let Ok(conn) = db.lock() {
-                            let _ = db::insert_session(
-                                &conn,
-                                prev.app_id,
-                                &prev.stored_title,
-                                prev.start_ts,
-                                end,
-                                is_idle,
-                                prev.content.as_deref(),
-                            );
+                    if let Ok(conn) = db.lock() {
+                        match prev.row_id {
+                            // Viva no banco desde a abertura (heartbeat): só fecha.
+                            // Se o idle-trim a encolheu abaixo do mínimo, descarta.
+                            Some(id) => {
+                                if end - prev.start_ts >= MIN_SESSION_SECS {
+                                    let _ = db::finish_session(
+                                        &conn, id, end, is_idle, prev.content.as_deref(),
+                                    );
+                                } else {
+                                    let _ = db::delete_session(&conn, id);
+                                }
+                            }
+                            // Curta demais pra ter ganhado linha: grava só se
+                            // cruzou o mínimo entre a última batida e agora.
+                            None if end - prev.start_ts >= MIN_SESSION_SECS => {
+                                let _ = db::insert_session(
+                                    &conn,
+                                    prev.app_id,
+                                    &prev.stored_title,
+                                    prev.start_ts,
+                                    end,
+                                    is_idle,
+                                    prev.content.as_deref(),
+                                );
+                            }
+                            None => {}
                         }
                     }
                 }
@@ -239,12 +258,40 @@ pub fn spawn(
                             pid: w.pid,
                             content: None,
                             content_done: false,
+                            row_id: None,
                         });
                     }
                 }
 
                 let _ = app.emit("focus-changed", &win);
                 coach.note_switch(now);
+            }
+
+            // HEARTBEAT (Fase B): a sessão corrente vive no banco desde que se
+            // firma (>= MIN_SESSION_SECS) e o fim é empurrado a cada batida.
+            // Crash/kill/bateria: a última batida JÁ está gravada — o erro
+            // máximo é 1 tick, nunca a sessão inteira (modelo ActivityWatch).
+            if !is_paused && !is_idle {
+                if let Some(cur) = current.as_mut() {
+                    if let Ok(conn) = db.lock() {
+                        match cur.row_id {
+                            Some(id) => {
+                                let _ = db::extend_session(&conn, id, now);
+                            }
+                            None if now - cur.start_ts >= MIN_SESSION_SECS => {
+                                cur.row_id = db::open_session(
+                                    &conn,
+                                    cur.app_id,
+                                    &cur.stored_title,
+                                    cur.start_ts,
+                                    now,
+                                )
+                                .ok();
+                            }
+                            None => {}
+                        }
+                    }
+                }
             }
 
             // "Olhos" pra IA categorizar por CONTEÚDO: captura UMA vez por sessão,

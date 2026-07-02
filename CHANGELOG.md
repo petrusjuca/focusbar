@@ -1,5 +1,18 @@
 # focusbar — o que mudou
 
+## v0.6.0 — Fase B: heartbeat + derivador (dado que sobrevive a crash)
+- **Nenhuma sessão se perde mais.** Antes, a sessão só era gravada quando
+  FECHAVA — crash, forçar-sair ou bateria acabando no meio de 2h de trabalho =
+  2h perdidas. Agora a sessão nasce no banco assim que se firma (2s) e o fim é
+  empurrado a cada batida do rastreador (modelo do ActivityWatch): o erro
+  máximo passa a ser 1 segundo, sempre.
+- **Blocos mais honestos (derivador da v2 transplantado):** "Code → 10s de
+  WhatsApp → Code" agora vira UM bloco de Code (com o WhatsApp como blocozinho
+  no meio) — a visita curta não fragmenta mais o trabalho em três pedaços. A
+  duração soma só o tempo REAL (o gap tolerado não conta).
+- Bônus: a sessão em andamento aparece no "Hoje" crescendo ao vivo (antes só
+  aparecia quando você trocava de janela).
+
 ## v0.5.2 — "checar agora" julga o que você FAZIA, não o próprio focusbar
 - Clicar em **"checar agora"** foca o próprio focusbar — e aí o juiz via…
   o focusbar, sempre. Agora, nesse caso, ele julga o **último app real** que

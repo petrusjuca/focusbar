@@ -46,20 +46,24 @@ pub const GROUP_GAP_SECS: i64 = 90;
 /// os da primeira filha.
 pub fn group_sessions(sessions: &[FocusSession], gap: i64) -> Vec<FocusSession> {
     let mut out: Vec<FocusSession> = Vec::new();
-    let mut last_end: i64 = 0; // fim (start+dur) da última filha do bloco atual
+    let mut ends: Vec<i64> = Vec::new(); // fim REAL (última filha) de cada bloco
     for s in sessions {
         let s_end = s.start_ts + s.duration_secs;
-        if let Some(cur) = out.last_mut() {
-            let gap_to = (s.start_ts - last_end).max(0);
-            if cur.app_name == s.app_name && gap_to <= gap {
-                cur.duration_secs += s.duration_secs;
-                cur.was_idle_trimmed |= s.was_idle_trimmed;
-                last_end = s_end;
+        // Procura o último bloco DA MESMA app (não só o imediatamente anterior):
+        // "Code → 10s WhatsApp → Code" vira UM bloco de Code, com o WhatsApp
+        // como blocozinho próprio no meio (derivador da v2, transplantado).
+        // A duração soma só os trechos REAIS — o gap tolerado não conta.
+        if let Some(i) = (0..out.len()).rev().find(|&i| out[i].app_name == s.app_name) {
+            let gap_to = (s.start_ts - ends[i]).max(0);
+            if gap_to <= gap {
+                out[i].duration_secs += s.duration_secs;
+                out[i].was_idle_trimmed |= s.was_idle_trimmed;
+                ends[i] = ends[i].max(s_end);
                 continue;
             }
         }
         out.push(s.clone());
-        last_end = s_end;
+        ends.push(s_end);
     }
     out
 }
@@ -454,6 +458,54 @@ pub fn insert_session(
     Ok(())
 }
 
+/// HEARTBEAT (Fase B): abre a sessão JÁ NO BANCO assim que ela se firma (>=2s),
+/// com end_ts = agora. A cada batida do sampler, `extend_session` empurra o fim.
+/// Se o app morrer (crash, kill, bateria), a última batida JÁ ESTÁ gravada —
+/// o erro máximo é um tick de polling, nunca a sessão inteira (modelo do
+/// ActivityWatch: nenhuma sessão órfã pra curar, o dado está sempre íntegro).
+pub fn open_session(
+    conn: &Connection,
+    app_id: i64,
+    title: &str,
+    start_ts: i64,
+    now: i64,
+) -> rusqlite::Result<i64> {
+    conn.execute(
+        "INSERT INTO focus_events(app_id, title, start_ts, end_ts, duration_secs, was_idle_trimmed)
+         VALUES (?1, ?2, ?3, ?4, ?4 - ?3, 0)",
+        params![app_id, title, start_ts, now],
+    )?;
+    Ok(conn.last_insert_rowid())
+}
+
+/// Batida: empurra o fim da sessão aberta pra `now` (end e duração juntos —
+/// a linha fica SEMPRE consistente, leitor nenhum vê estado intermediário).
+pub fn extend_session(conn: &Connection, rowid: i64, now: i64) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE focus_events SET end_ts = ?2, duration_secs = ?2 - start_ts WHERE rowid = ?1",
+        params![rowid, now],
+    )?;
+    Ok(())
+}
+
+/// Fechamento definitivo: fim exato (pode RECUAR a última batida — idle-trim),
+/// flag de idle e o conteúdo capturado (se houver).
+pub fn finish_session(
+    conn: &Connection,
+    rowid: i64,
+    end_ts: i64,
+    idle_trimmed: bool,
+    content: Option<&str>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE focus_events SET end_ts = ?2, duration_secs = ?2 - start_ts,
+            was_idle_trimmed = ?3, content = COALESCE(?4, content)
+         WHERE rowid = ?1",
+        params![rowid, end_ts, idle_trimmed as i64, content],
+    )?;
+    Ok(())
+}
+
 /// Sessões que TÊM conteúdo capturado mas ainda NÃO foram categorizadas pela IA.
 /// (id, app_name, title, content). Pra o categorizador processar em lote.
 pub fn sessions_needing_category(
@@ -737,6 +789,99 @@ mod tests {
         let raw = vec![sess(1, "Opera", 0, 60), sess(2, "Code", 60, 60)];
         let g = group_sessions(&raw, GROUP_GAP_SECS);
         assert_eq!(g.len(), 2);
+    }
+
+    #[test]
+    fn group_funde_atraves_de_visita_curta() {
+        // Derivador da v2: "Code → 10s WhatsApp → Code" = UM bloco de Code
+        // (duração soma só os trechos reais) + o WhatsApp como bloco próprio.
+        let raw = vec![
+            sess(1, "Code", 0, 60),
+            sess(2, "WhatsApp", 60, 10),
+            sess(3, "Code", 70, 60),
+        ];
+        let g = group_sessions(&raw, GROUP_GAP_SECS);
+        assert_eq!(g.len(), 2);
+        assert_eq!(g[0].app_name, "Code");
+        assert_eq!(g[0].duration_secs, 120); // 60+60, o gap de 10s NÃO conta
+        assert_eq!(g[0].id, 1);
+        assert_eq!(g[1].app_name, "WhatsApp");
+        assert_eq!(g[1].duration_secs, 10);
+    }
+
+    #[test]
+    fn group_nao_funde_atraves_de_visita_longa() {
+        // A visita no meio durou 200s (> gap de 90s desde o fim do Code) →
+        // o segundo Code é um bloco NOVO.
+        let raw = vec![
+            sess(1, "Code", 0, 60),
+            sess(2, "WhatsApp", 60, 200),
+            sess(3, "Code", 260, 60),
+        ];
+        let g = group_sessions(&raw, GROUP_GAP_SECS);
+        assert_eq!(g.len(), 3);
+    }
+
+    #[test]
+    fn group_intercalado_funde_cada_app_no_seu_bloco() {
+        // A B A B com visitas curtas → 2 blocos (um por app), durações somadas.
+        let raw = vec![
+            sess(1, "Code", 0, 30),
+            sess(2, "Opera", 30, 30),
+            sess(3, "Code", 60, 30),
+            sess(4, "Opera", 90, 30),
+        ];
+        let g = group_sessions(&raw, GROUP_GAP_SECS);
+        assert_eq!(g.len(), 2);
+        assert_eq!(g[0].duration_secs, 60);
+        assert_eq!(g[1].duration_secs, 60);
+    }
+
+    #[test]
+    fn heartbeat_abre_estende_e_fecha() {
+        let c = mem();
+        let app_id = get_or_create_app(&c, "Code", "").unwrap();
+        // Abre firmada aos 2s (start retroativo ao início real).
+        let row = open_session(&c, app_id, "main.rs", 1000, 1002).unwrap();
+        // Batidas empurram o fim; a linha fica sempre consistente.
+        extend_session(&c, row, 1010).unwrap();
+        let (end, dur): (i64, i64) = c
+            .query_row(
+                "SELECT end_ts, duration_secs FROM focus_events WHERE rowid = ?1",
+                params![row],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((end, dur), (1010, 10));
+        // Fechamento pode RECUAR (idle-trim) e grava conteúdo.
+        finish_session(&c, row, 1005, true, Some("texto da tela")).unwrap();
+        let (end, dur, idle, content): (i64, i64, i64, Option<String>) = c
+            .query_row(
+                "SELECT end_ts, duration_secs, was_idle_trimmed, content
+                 FROM focus_events WHERE rowid = ?1",
+                params![row],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!((end, dur, idle), (1005, 5, 1));
+        assert_eq!(content.as_deref(), Some("texto da tela"));
+    }
+
+    #[test]
+    fn heartbeat_crash_preserva_ate_a_ultima_batida() {
+        // Sem finish (crash): a linha vale até a última batida — íntegra.
+        let c = mem();
+        let app_id = get_or_create_app(&c, "Code", "").unwrap();
+        let row = open_session(&c, app_id, "main.rs", 1000, 1002).unwrap();
+        extend_session(&c, row, 1600).unwrap();
+        let (end, dur): (i64, i64) = c
+            .query_row(
+                "SELECT end_ts, duration_secs FROM focus_events WHERE rowid = ?1",
+                params![row],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((end, dur), (1600, 600));
     }
 
     fn mem() -> Connection {
