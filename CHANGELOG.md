@@ -1,6 +1,6 @@
 # focusbar — o que mudou
 
-## (em desenvolvimento) — extensão de browser (Fase A do roadmap)
+## v0.5.0 — extensão de browser (Fase A do roadmap)
 - **Sites de verdade em QUALQUER navegador:** nova extensão (pasta `extension/`,
   instala descompactada no Opera GX/Chrome/Edge) reporta a aba ativa ao focusbar
   via `127.0.0.1:7690`. Acaba o "4h51 no Opera GX" sem dizer onde — agora é
