@@ -1,4 +1,4 @@
-# FOCUSBAR V2 — Especificação completa, função por função
+# FOCUSBAR — Especificação-alvo, função por função (implementada como EVOLUÇÃO da v1, não rewrite — decisão 02.07)
 
 > Escrita em 01.07.2026. Este documento descreve POR EXTENSO como cada função do
 > focusbar v2 deve funcionar — pra ser revisado por Petrus + João antes de

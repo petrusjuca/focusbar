@@ -1,0 +1,1 @@
+/Users/petrusjuca/dev/focusbar/v2/target/release/focusbar-core: /Users/petrusjuca/dev/focusbar/v2/src/api.rs /Users/petrusjuca/dev/focusbar/v2/src/capture.rs /Users/petrusjuca/dev/focusbar/v2/src/db.rs /Users/petrusjuca/dev/focusbar/v2/src/derive.rs /Users/petrusjuca/dev/focusbar/v2/src/main.rs
