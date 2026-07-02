@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "focusbar — abas",
+  "version": "0.1.0",
+  "description": "Reporta a aba ativa ao focusbar rodando NESTA máquina (127.0.0.1). Nada sai do computador.",
+  "permissions": ["tabs"],
+  "host_permissions": ["http://127.0.0.1:7690/*"],
+  "background": {
+    "service_worker": "background.js"
+  }
+}

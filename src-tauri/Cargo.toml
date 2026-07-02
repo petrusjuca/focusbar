@@ -37,6 +37,9 @@ tauri-plugin-clipboard-manager = "2.3.2"
 xcap = "0.9.6"
 image = "0.25"
 uni-ocr = "0.1.5"
+# API HTTP local (127.0.0.1:7690) que recebe os eventos da extensão de browser.
+# Síncrona e minúscula de propósito — uma thread, zero runtime async.
+tiny_http = "0.12"
 # Runtime próprio pro sampler (thread síncrona) fazer block_on do OCR (async).
 tokio = { version = "1", features = ["rt", "rt-multi-thread", "time", "net"] }
 

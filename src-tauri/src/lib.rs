@@ -3,6 +3,7 @@
 #![deny(clippy::await_holding_lock)]
 
 mod ai;
+mod api;
 mod capture;
 // Públicos para o binário `mcp` (servidor MCP local) reusar as queries e tipos.
 pub mod category;
@@ -138,8 +139,18 @@ pub fn run() {
             // Tenta ligar o Ollama sozinho (best-effort; se não tiver, ignora).
             commands::assistant::try_start_ollama();
 
+            // API local (127.0.0.1) que recebe os tab-events da extensão de
+            // browser — a fonte de URL que funciona no Opera GX/Windows. O
+            // sampler consulta o feed na troca de janela. Retenção: o cru de
+            // abas não precisa viver pra sempre.
+            if let Ok(conn) = db.lock() {
+                let _ = db::purge_old_tab_events(&conn, now_ts(), 90 * 24 * 3600);
+            }
+            let tab_feed = Arc::new(capture::tab_feed::TabFeed::new());
+            api::spawn(db.clone(), tab_feed.clone());
+
             // Sobe o sampler de foco e o scheduler de lembretes em background.
-            capture::sampler::spawn(app.handle().clone(), db.clone(), paused);
+            capture::sampler::spawn(app.handle().clone(), db.clone(), paused, tab_feed);
 
             // Auto-teste de OCR: 8s após abrir, OCRa a PRÓPRIA janela uma vez e
             // grava o resultado em settings (ocr_selftest). Diz a VERDADE sobre se o

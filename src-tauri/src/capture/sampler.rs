@@ -6,6 +6,7 @@
 //! - Pause: quando `paused`, não conta nada (sem ser procrastinação).
 //! - Idle: sem input por IDLE_THRESHOLD_SECS fecha no último input.
 
+use crate::capture::tab_feed::TabFeed;
 use crate::capture::{browser, signals, state, ActiveWinProvider, WindowProvider};
 use crate::coach::Coach;
 use crate::db;
@@ -91,7 +92,12 @@ fn is_system_noise(app: &str) -> bool {
     )
 }
 
-pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>) {
+pub fn spawn(
+    app: AppHandle,
+    db: Arc<Mutex<Connection>>,
+    paused: Arc<AtomicBool>,
+    tab_feed: Arc<TabFeed>,
+) {
     thread::spawn(move || {
         let provider = ActiveWinProvider;
         let mut current: Option<OpenSession> = None;
@@ -171,16 +177,24 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>, paused: Arc<AtomicBool>
 
                 // Abre a nova (resolve site + URL aqui, uma vez por troca).
                 if let Some(w) = win.as_ref() {
-                    // AppleScript pros navegadores scriptáveis; se falhar e for um
-                    // navegador (ex.: Opera GX, sem AppleScript), lê a URL da barra
-                    // de endereço pela Acessibilidade.
-                    let url = browser::browser_url(&w.app_name).or_else(|| {
-                        if browser::is_browser(&w.app_name) {
-                            crate::capture::browser_url_ax(w.pid)
-                        } else {
-                            None
-                        }
-                    });
+                    // AppleScript pros navegadores scriptáveis; senão a EXTENSÃO
+                    // (tab_feed — o caminho que funciona no Opera GX/Windows);
+                    // senão a URL da barra de endereço pela Acessibilidade.
+                    let url = browser::browser_url(&w.app_name)
+                        .or_else(|| {
+                            if browser::is_browser(&w.app_name) {
+                                tab_feed.url_for(&w.app_name, &w.title, now)
+                            } else {
+                                None
+                            }
+                        })
+                        .or_else(|| {
+                            if browser::is_browser(&w.app_name) {
+                                crate::capture::browser_url_ax(w.pid)
+                            } else {
+                                None
+                            }
+                        });
                     let (label_app, stored_title, bundle) = match &url {
                         Some(u) => (
                             browser::site_label(u).unwrap_or_else(|| w.app_name.clone()),

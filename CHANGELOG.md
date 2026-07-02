@@ -1,5 +1,20 @@
 # focusbar — o que mudou
 
+## (em desenvolvimento) — extensão de browser (Fase A do roadmap)
+- **Sites de verdade em QUALQUER navegador:** nova extensão (pasta `extension/`,
+  instala descompactada no Opera GX/Chrome/Edge) reporta a aba ativa ao focusbar
+  via `127.0.0.1:7690`. Acaba o "4h51 no Opera GX" sem dizer onde — agora é
+  WhatsApp, YouTube, Miro… também no **Windows** e no **Opera GX**.
+- **API local nova** (`127.0.0.1:7690`, só loopback): `POST /api/tab-event`
+  (extensão) e `GET /api/health` (sinal de vida). URL gravada **sem query/
+  fragment** (mesma regra de privacidade de sempre — duas vezes: na extensão
+  e no app).
+- **Registro cru de abas** (`tab_events`): ativou/mudou/fechou, com retenção
+  de 90 dias — o embrião da tabela bruta do roadmap.
+- Ordem de resolução de URL no rastreador: AppleScript → **extensão** →
+  Acessibilidade. Com dois navegadores abertos, a aba só é usada se o
+  navegador dela é o que está em foco (sem contaminação).
+
 ## v0.3.0 — auditoria geral (46 pendências resolvidas)
 Release grande de qualidade, a partir de uma auditoria multi-agente do app inteiro.
 

@@ -64,7 +64,7 @@ pub fn group_sessions(sessions: &[FocusSession], gap: i64) -> Vec<FocusSession> 
     out
 }
 
-fn migrate(conn: &Connection) -> rusqlite::Result<()> {
+pub(crate) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS apps (
             id        INTEGER PRIMARY KEY,
@@ -178,8 +178,47 @@ fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             created_at INTEGER NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_marker_kind_start ON interval_markers(kind, start_ts);
-        CREATE INDEX IF NOT EXISTS idx_marker_start ON interval_markers(start_ts);",
+        CREATE INDEX IF NOT EXISTS idx_marker_start ON interval_markers(start_ts);
+
+        -- Eventos de aba vindos da EXTENSÃO de browser (Fase A): o registro cru
+        -- de 'que aba ativou/mudou/fechou quando'. url já vem LIMPA (sem query/
+        -- fragment). É o embrião da tabela bruta de eventos do roadmap.
+        CREATE TABLE IF NOT EXISTS tab_events (
+            id      INTEGER PRIMARY KEY,
+            ts      INTEGER NOT NULL,
+            browser TEXT NOT NULL DEFAULT '',
+            action  TEXT NOT NULL,
+            tab_id  TEXT NOT NULL DEFAULT '',
+            url     TEXT NOT NULL DEFAULT '',
+            title   TEXT NOT NULL DEFAULT ''
+        );
+        CREATE INDEX IF NOT EXISTS idx_tab_events_ts ON tab_events(ts);",
     )
+}
+
+/// Grava um evento de aba da extensão (registro cru, append-only).
+pub fn append_tab_event(
+    conn: &Connection,
+    ts: i64,
+    browser: &str,
+    action: &str,
+    tab_id: &str,
+    url: &str,
+    title: &str,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "INSERT INTO tab_events(ts, browser, action, tab_id, url, title)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![ts, browser, action, tab_id, url, title],
+    )?;
+    Ok(())
+}
+
+/// Apaga eventos de aba mais velhos que `keep_secs` (retenção — o cru não
+/// precisa viver pra sempre; as sessões derivadas são o histórico durável).
+pub fn purge_old_tab_events(conn: &Connection, now: i64, keep_secs: i64) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM tab_events WHERE ts < ?1", params![now - keep_secs])?;
+    Ok(())
 }
 
 /// Abre um marcador de intervalo (ex.: começou a pausa/ausência). Idempotente:
