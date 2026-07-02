@@ -1,5 +1,11 @@
 # focusbar — o que mudou
 
+## v0.5.2 — "checar agora" julga o que você FAZIA, não o próprio focusbar
+- Clicar em **"checar agora"** foca o próprio focusbar — e aí o juiz via…
+  o focusbar, sempre. Agora, nesse caso, ele julga o **último app real** que
+  você estava usando (visto pelo rastreador nos últimos 2min), passando pelos
+  mesmos porteiros de privacidade (zona de exclusão, título limpo, redação).
+
 ## v0.5.1 — o juiz de foco não cita mais o lixo do Chrome
 - O agente de foco julgava (e citava como "evidência") o aviso que o Chrome
   enfia no título da janela — "**Uso elevado da memória**", contador "(NN)",

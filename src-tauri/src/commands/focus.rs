@@ -136,6 +136,31 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
         None => return Ok(none("Sem janela em foco.")),
     };
 
+    // Clicar em "checar agora" foca o PRÓPRIO focusbar — julgar isso seria
+    // sempre "você está no focusbar", inútil. Nesse caso, julga o último app
+    // REAL que o sampler viu (fresco: até 2min). Snapshot cru → passa pelos
+    // mesmos porteiros (zona de exclusão, limpeza de título, redação).
+    let (app, title, pid) = if app.eq_ignore_ascii_case("focusbar") {
+        let lw = state.last_real_window.lock().ok().and_then(|g| g.clone());
+        match lw {
+            Some(lw) if now_ts() - lw.ts <= 120 => {
+                if redact::is_excluded(&lw.app, &lw.title) {
+                    return Ok(none("Sessão em zona de exclusão (não analisada)."));
+                }
+                let t = if browser::is_browser(&lw.app) {
+                    browser::clean_browser_title(&lw.title)
+                } else {
+                    lw.title.clone()
+                };
+                (lw.app.clone(), redact::redact(&t), lw.pid)
+            }
+            // Sem snapshot fresco → segue com "focusbar" e cai no aviso abaixo.
+            _ => (app, title, pid),
+        }
+    } else {
+        (app, title, pid)
+    };
+
     let (focus, rule, cat, ocr_enabled) = {
         let conn = state.db.lock().map_err(|e| e.to_string())?;
         let focus = db::get_focus(&conn).map_err(|e| e.to_string())?;

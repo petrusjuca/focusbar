@@ -134,6 +134,7 @@ pub fn run() {
                 db: db.clone(),
                 paused: paused.clone(),
                 last_check: std::sync::Mutex::new(None),
+                last_real_window: std::sync::Mutex::new(None),
             });
 
             // Tenta ligar o Ollama sozinho (best-effort; se não tiver, ignora).

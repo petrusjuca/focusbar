@@ -16,6 +16,17 @@ pub struct CachedCheck {
     pub ts: i64,
 }
 
+/// Último app REAL (≠ focusbar) que o sampler viu em foco. Existe por causa do
+/// "checar agora": clicar no botão foca o PRÓPRIO focusbar, e julgar isso seria
+/// inútil — o juiz usa este snapshot pra julgar o que você fazia ANTES do clique.
+#[derive(Clone)]
+pub struct LastRealWindow {
+    pub app: String,
+    pub title: String, // cru — a limpeza acontece em quem consome
+    pub pid: i32,
+    pub ts: i64,
+}
+
 /// Estado global gerenciado pelo Tauri. A conexão é compartilhada entre os
 /// commands (leitura) e o sampler em background (escrita) via Arc<Mutex<>>.
 /// `paused` desliga o rastreamento sem fechar o app (sem contar como nada).
@@ -29,4 +40,6 @@ pub struct AppState {
     pub paused: Arc<AtomicBool>,
     /// Última checagem de foco (cache por janela) — ver `CachedCheck`.
     pub last_check: Mutex<Option<CachedCheck>>,
+    /// Último app real em foco (≠ focusbar) — ver `LastRealWindow`.
+    pub last_real_window: Mutex<Option<LastRealWindow>>,
 }

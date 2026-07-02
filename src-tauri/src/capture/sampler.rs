@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 const POLL_SECS: u64 = 1;
 const MIN_SESSION_SECS: i64 = 2;
@@ -146,6 +146,22 @@ pub fn spawn(
             } else {
                 provider.current().filter(|w| !is_system_noise(&w.app_name))
             };
+
+            // Snapshot do último app REAL em foco (≠ focusbar) — é o que o
+            // "checar agora" julga, já que o clique no botão foca o focusbar.
+            if let Some(w) = win.as_ref() {
+                if !w.app_name.eq_ignore_ascii_case("focusbar") {
+                    let st = app.state::<crate::state::AppState>();
+                    if let Ok(mut lw) = st.last_real_window.lock() {
+                        *lw = Some(crate::state::LastRealWindow {
+                            app: w.app_name.clone(),
+                            title: w.title.clone(),
+                            pid: w.pid,
+                            ts: now,
+                        });
+                    };
+                }
+            }
 
             let new_key = win.as_ref().map(|w| (w.app_name.as_str(), w.title.as_str()));
             let cur_key = current
