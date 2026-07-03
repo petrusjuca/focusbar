@@ -17,9 +17,7 @@ export type SessionPhase = "idle" | "focus" | "overtime" | "break" | "break_over
 const BREAK_SECS = 5 * 60;
 const KEY = "focus-session";
 
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+import { todayLocal as today } from "../format";
 
 async function notify(title: string, body: string) {
   try {

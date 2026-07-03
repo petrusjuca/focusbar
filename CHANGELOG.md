@@ -1,5 +1,26 @@
 # focusbar — o que mudou
 
+## v0.7.0 — o cérebro é o Claude (Ollama removido) + intenção que não some
+- **Ollama removido de vez** (decisão D2 / pedido do João): o app não roda LLM
+  local. Ao vivo, o juiz de foco usa só camadas confiáveis — regra que você
+  ensinou (1 clique), match com a intenção, categoria. Rápido, leve, zero
+  alucinação. App mais enxuto (menos uma dependência de rede inteira).
+- **O julgamento profundo é do Claude, via MCP — e agora o veredito VOLTA:**
+  - `recap_do_dia`: o dossiê do fim do dia num tiro só (intenção declarada,
+    resumo, blocos, pomodoros, média da semana + instruções de análise gentil).
+  - `standup`: ontem + hoje condensados pro update de standup sair pronto.
+  - `corrigir_categoria`: a ÚNICA escrita do MCP — o Claude corrige a categoria
+    de um bloco ("esses 40min de YouTube eram estudo") e o dashboard amanhece
+    certo. Validação das 7 categorias; todo o resto segue read-only.
+- **Bug da intenção que some/repergunta (Rev4 #6) consertado** — eram 4 juntos:
+  o "dia" do front era UTC (depois das 21h o ritual da manhã voltava a
+  perguntar); o "☀️ Bom dia" aparecia à meia-noite pra quem estava acordado
+  (agora só a partir das 4h); e definir/apagar intenção agora reflete NA HORA
+  na cascata e no mini (antes esperava o próximo poll).
+- **Painel dos sentidos:** o auto-diagnóstico agora inclui a extensão de
+  browser (conectada ✓ / parou de reportar ⚠) e perdeu o sensor de Ollama.
+- Aba Assistente reescrita: MCP em primeiro, copiar-pro-Claude como fallback.
+
 ## v0.6.0 — Fase B: heartbeat + derivador (dado que sobrevive a crash)
 - **Nenhuma sessão se perde mais.** Antes, a sessão só era gravada quando
   FECHAVA — crash, forçar-sair ou bateria acabando no meio de 2h de trabalho =

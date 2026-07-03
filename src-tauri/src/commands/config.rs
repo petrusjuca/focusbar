@@ -133,26 +133,12 @@ pub fn set_setting(state: State<AppState>, key: String, value: String) -> Result
     db::set_setting(&conn, &key, &value).map_err(|e| e.to_string())
 }
 
-/// Categoriza, pela IA e pelo CONTEÚDO, algumas sessões ainda sem categoria.
-/// Chamado pelo frontend de tempos em tempos. Para na 1ª falha (Ollama off).
-/// Retorna quantas classificou. NUNCA segura o lock do DB atravessando um await.
+
+/// Último evento recebido da EXTENSÃO de browser (unix ts; 0 = nunca).
+/// É o "sinal de vida" do sentido de abas — a UI mostra se ela está conectada.
 #[tauri::command]
-pub async fn categorize_pending(state: State<'_, AppState>) -> Result<u32, String> {
-    let pending = {
-        let conn = state.db.lock().map_err(|e| e.to_string())?;
-        db::sessions_needing_category(&conn, 2).map_err(|e| e.to_string())?
-    };
-    let mut done = 0u32;
-    for (id, app, title, content) in pending {
-        match crate::ai::categorize_activity(&app, &title, &content).await {
-            Ok((cat, act)) => {
-                if let Ok(conn) = state.db.lock() {
-                    let _ = db::set_session_category(&conn, id, &cat, &act);
-                    done += 1;
-                }
-            }
-            Err(_) => break, // Ollama provavelmente indisponível — não insiste agora
-        }
-    }
-    Ok(done)
+pub fn get_extension_last_event(state: State<AppState>) -> Result<i64, String> {
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    conn.query_row("SELECT COALESCE(MAX(ts), 0) FROM tab_events", [], |r| r.get(0))
+        .map_err(|e| e.to_string())
 }

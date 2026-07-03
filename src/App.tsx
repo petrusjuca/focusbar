@@ -205,26 +205,8 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [onboarded]);
 
-  // Categorizador por CONTEÚDO (em background): a IA lê o que estava na tela e
-  // classifica a atividade — em vez de chutar pelo nome do app. Para sozinho se
-  // o Ollama estiver off. O poll de dados (20s) reflete as categorias novas.
-  useEffect(() => {
-    async function tick() {
-      try {
-        await invoke<number>("categorize_pending");
-      } catch {
-        /* sem Ollama — tudo bem, cai na regra por app */
-      }
-    }
-    // Throttle: roda esporádico (3min) — categorizar é caro (bate no Ollama).
-    // Assim o modelo descarrega entre usos em vez de ficar quente drenando bateria.
-    const first = setTimeout(tick, 20000);
-    const id = setInterval(tick, 180000);
-    return () => {
-      clearTimeout(first);
-      clearInterval(id);
-    };
-  }, []);
+  // (O categorizador por Ollama saiu — decisão D2. Categoria = regra + sua
+  // correção de 1 clique; o julgamento profundo é do Claude via MCP.)
 
   useEffect(() => {
     invoke<boolean>("get_autostart").then(setAutostart).catch(() => {});

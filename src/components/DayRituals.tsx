@@ -1,13 +1,11 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import type { Note } from "../types";
+import { todayLocal as today } from "../format";
 
 // Rituais do dia — o app PUXA você, não espera você lembrar:
 //  • De manhã (dia novo sem intenção) → pergunta "qual a intenção de hoje?".
 //  • No fim do dia (horário configurável) → "acabou por hoje?".
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export function DayRituals() {
   const day = today();
@@ -37,12 +35,14 @@ export function DayRituals() {
     })();
   }, [day]);
 
-  // Checa o horário de fim de dia a cada minuto.
+  // Checa o horário (fim de dia + hora atual) a cada minuto.
+  const [hourNow, setHourNow] = useState(() => new Date().getHours());
   useEffect(() => {
     function check() {
       const done = localStorage.getItem("eod-done-" + day) === "1";
       const snooze = parseInt(localStorage.getItem("eod-snooze-" + day) || "0", 10);
       const hour = new Date().getHours();
+      setHourNow(hour);
       setEodAsk(!done && hour >= eodHour && Date.now() > snooze);
     }
     check();
@@ -58,6 +58,8 @@ export function DayRituals() {
       const notes = await invoke<Note[]>("list_notes", { day: null });
       setIntentionToday(notes.some((n) => n.kind === "intention"));
       setText("");
+      // Avisa a cascata/mini NA HORA (senão a intenção "some" até o próximo poll).
+      window.dispatchEvent(new CustomEvent("focusbar:notes-changed"));
     } catch {
       /* falhou → mantém o card pra você tentar de novo */
     }
@@ -76,7 +78,10 @@ export function DayRituals() {
     setEodAsk(false);
   }
 
-  const showMorning = intentionToday === false && !skipped;
+  // Madrugada NÃO é manhã: o app fica sempre aberto (bandeja) e o dia local
+  // vira à meia-noite — sem este gate, ele dava "☀️ Bom dia!" às 00h01 pra
+  // quem ainda estava acordado (a "repergunta" do bug Rev4 #6).
+  const showMorning = intentionToday === false && !skipped && hourNow >= 4;
 
   return (
     <>

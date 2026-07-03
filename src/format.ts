@@ -1,3 +1,13 @@
+/** Data de HOJE no fuso LOCAL ("YYYY-MM-DD"). NÃO usar toISOString().slice():
+ *  ela é UTC — no Brasil, depois das 21h o "dia" viraria amanhã. Era isso que
+ *  fazia o ritual da manhã reaparecer às 21h perguntando a intenção de novo
+ *  (bug Rev4 #6): as chaves de "hoje não"/"acabou por hoje" expiravam à noite. */
+export function todayLocal(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
 export function fmtDuration(secs: number): string {
   if (secs < 60) return `${secs}s`;
   const m = Math.floor(secs / 60);

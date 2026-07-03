@@ -1,9 +1,13 @@
 //! Servidor MCP local do focusbar.
 //!
-//! Fala JSON-RPC 2.0 por stdio (uma mensagem por linha) e expõe ferramentas de
-//! LEITURA sobre o mesmo SQLite que o app grava. É assim que o Claude (Desktop
-//! ou Code) lê seus dados de foco SEM o app gastar API paga: você traz o seu
-//! Claude, o servidor entrega os números. Nunca escreve no banco.
+//! Fala JSON-RPC 2.0 por stdio (uma mensagem por linha) e expõe ferramentas
+//! sobre o mesmo SQLite que o app grava. É assim que o Claude (Desktop ou
+//! Code) lê seus dados de foco SEM o app gastar API paga: você traz o seu
+//! Claude, o servidor entrega os números.
+//!
+//! Escrita: SÓ a ferramenta `corrigir_categoria`, e só na coluna de categoria
+//! dos blocos (o veredito do fim do dia volta pro app — decisão D2). Todo o
+//! resto é read-only por construção (conexão aberta READ_ONLY).
 //!
 //! Configurar no Claude Desktop (claude_desktop_config.json):
 //!   "focusbar": { "command": "/caminho/para/mcp" }
@@ -154,6 +158,25 @@ fn tools_list() -> Value {
             "name": "resumo_da_semana",
             "description": "Tempo de foco por dia nos ultimos 7 dias (terminando hoje ou no dia informado).",
             "inputSchema": { "type": "object", "properties": dia_prop }
+        },
+        {
+            "name": "recap_do_dia",
+            "description": "O DOSSIE completo do dia num tiro so: intencao declarada, resumo, blocos, pomodoros e media da semana — pronto pra voce analisar (gentil, nunca punitivo) e comparar intencao vs realidade. Use no fim do dia.",
+            "inputSchema": { "type": "object", "properties": dia_prop }
+        },
+        {
+            "name": "standup",
+            "description": "Dados de ontem + hoje condensados pra voce redigir um update de standup em primeira pessoa (o que fiz, no que estou, travas).",
+            "inputSchema": { "type": "object", "properties": dia_prop }
+        },
+        {
+            "name": "corrigir_categoria",
+            "description": "ESCREVE no focusbar: corrige a categoria de um app/site num dia (o veredito da sua analise volta pro dashboard). Categorias validas: Trabalho, Estudo, Comunicação, Pessoal, Ferramenta, Procrastinação, Outro. Use categoria vazia pra voltar ao automatico.",
+            "inputSchema": { "type": "object", "properties": {
+                "app": { "type": "string", "description": "Nome EXATO do app/site como aparece nos blocos (ex.: YouTube, Opera GX)." },
+                "categoria": { "type": "string", "description": "Uma das 7 categorias, ou vazia pra automatico." },
+                "dia": { "type": "string", "description": "Dia AAAA-MM-DD. Omita para hoje." }
+            }, "required": ["app", "categoria"] }
         }
     ])
 }
@@ -188,8 +211,99 @@ fn call_tool(conn: &Connection, req: &Value) -> Result<String, String> {
         "blocos_do_dia" => blocos_do_dia(conn, dia),
         "pomodoros_do_dia" => pomodoros_do_dia(conn, dia),
         "resumo_da_semana" => resumo_da_semana(conn, dia),
+        "recap_do_dia" => recap_do_dia(conn, dia),
+        "standup" => standup(conn, dia),
+        "corrigir_categoria" => corrigir_categoria(&args, dia),
         other => Err(format!("ferramenta desconhecida: {other}")),
     }
+}
+
+/// O dossiê do fim de dia: tudo que o Claude precisa num tiro só.
+fn recap_do_dia(conn: &Connection, dia: Option<&str>) -> Result<String, String> {
+    let label = day_label(dia);
+    let ints = db::notes::intentions_for_day(conn, &label).unwrap_or_default();
+    let intencao = if ints.is_empty() {
+        "  (nenhuma intenção declarada neste dia)".to_string()
+    } else {
+        ints.iter().map(|i| format!("  - {i}")).collect::<Vec<_>>().join("\n")
+    };
+    let resumo = resumo_do_dia(conn, dia)?;
+    let blocos = blocos_do_dia(conn, dia)?;
+    let poms = pomodoros_do_dia(conn, dia)?;
+    let semana = resumo_da_semana(conn, dia)?;
+    Ok(format!(
+        "RECAP DE {label}\n\nINTENÇÃO DECLARADA:\n{intencao}\n\n{resumo}\n\n{blocos}\n\n{poms}\n\nCONTEXTO DA SEMANA (pra comparar com a média):\n{semana}\n\n\
+COMO ANALISAR (a pessoa tem TDAH — gentil e honesto, NUNCA punitivo):\n\
+1. O dia em 3-5 blocos concretos (use URLs/títulos, não só nome de app).\n\
+2. Intenção vs realidade: foi pra onde disse que ia?\n\
+3. O maior ladrão de tempo, nomeado, e QUANDO o dia escapou.\n\
+4. UMA melhoria pequena e concreta pra amanhã.\n\
+Se uma categoria estiver errada (ex.: YouTube que era estudo), corrija com a ferramenta corrigir_categoria."
+    ))
+}
+
+/// Ontem + hoje condensados pro Claude redigir o update de standup.
+fn standup(conn: &Connection, dia: Option<&str>) -> Result<String, String> {
+    let base = parse_date(dia);
+    // "Ontem" útil: volta até 3 dias procurando o último dia com dados
+    // (segunda-feira o standup fala da sexta, não do domingo vazio).
+    let mut ontem_label = (base - Duration::days(1)).format("%Y-%m-%d").to_string();
+    for back in 1..=3 {
+        let d = (base - Duration::days(back)).format("%Y-%m-%d").to_string();
+        let (s, e) = day_bounds(Some(&d));
+        if !db::sessions_in_range(conn, s, e).map_err(de)?.is_empty() {
+            ontem_label = d;
+            break;
+        }
+    }
+    let ontem = blocos_do_dia(conn, Some(&ontem_label))?;
+    let hoje = blocos_do_dia(conn, Some(&day_label(dia)))?;
+    let poms_ontem = pomodoros_do_dia(conn, Some(&ontem_label))?;
+    Ok(format!(
+        "DADOS PRO STANDUP\n\nÚLTIMO DIA TRABALHADO ({ontem_label}):\n{ontem}\n{poms_ontem}\n\nHOJE (até agora):\n{hoje}\n\n\
+Redija um update de standup CURTO, em primeira pessoa, em 3 partes: o que fiz, \
+no que estou agora, travas (se os dados não mostrarem trava, diga 'sem travas'). \
+Foque em atividades concretas (projetos/sites), não em nomes de app."
+    ))
+}
+
+/// A ÚNICA escrita do MCP: o veredito do Claude vira categoria no dashboard.
+/// Abre uma conexão própria read-write só pra isto (a principal segue READ_ONLY).
+fn corrigir_categoria(args: &Value, dia: Option<&str>) -> Result<String, String> {
+    const VALIDAS: &[&str] = &[
+        "Trabalho", "Estudo", "Comunicação", "Pessoal", "Ferramenta", "Procrastinação", "Outro",
+    ];
+    let app = args
+        .get("app")
+        .and_then(|a| a.as_str())
+        .map(str::trim)
+        .filter(|a| !a.is_empty())
+        .ok_or("informe o app (nome exato do bloco)")?;
+    let categoria = args.get("categoria").and_then(|c| c.as_str()).unwrap_or("").trim();
+    if !categoria.is_empty() && !VALIDAS.contains(&categoria) {
+        return Err(format!(
+            "categoria invalida: \"{categoria}\". Validas: {} (ou vazia pra automatico)",
+            VALIDAS.join(", ")
+        ));
+    }
+    let (start, end) = day_bounds(dia);
+    let rw = Connection::open_with_flags(
+        db_path(),
+        OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(de)?;
+    let n = db::set_block_category(&rw, app, start, end, categoria).map_err(de)?;
+    if n == 0 {
+        return Err(format!(
+            "nenhuma sessão de \"{app}\" em {} — confira o nome exato no blocos_do_dia",
+            day_label(dia)
+        ));
+    }
+    Ok(if categoria.is_empty() {
+        format!("{app} em {} voltou pra categoria automática ({n} sessões).", day_label(dia))
+    } else {
+        format!("{app} em {} → {categoria} ({n} sessões corrigidas).", day_label(dia))
+    })
 }
 
 fn resumo_do_dia(conn: &Connection, dia: Option<&str>) -> Result<String, String> {

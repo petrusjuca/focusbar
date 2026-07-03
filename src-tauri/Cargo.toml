@@ -1,6 +1,6 @@
 [package]
 name = "focusbar"
-version = "0.6.0"
+version = "0.7.0"
 description = "Assistente de produtividade local"
 authors = ["you"]
 edition = "2021"
@@ -31,7 +31,6 @@ active-win-pos-rs = "0.8"
 rusqlite = { version = "0.32", features = ["bundled"] }
 user-idle = "0.6"
 chrono = "0.4"
-reqwest = { version = "0.12", features = ["json"] }
 regex = "1"
 tauri-plugin-clipboard-manager = "2.3.2"
 xcap = "0.9.6"

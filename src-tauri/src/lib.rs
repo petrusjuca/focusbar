@@ -2,7 +2,6 @@
 // atravessando um `.await` — travaria o sampler. Enforçado sob `cargo clippy`.
 #![deny(clippy::await_holding_lock)]
 
-mod ai;
 mod api;
 mod capture;
 // Públicos para o binário `mcp` (servidor MCP local) reusar as queries e tipos.
@@ -17,11 +16,9 @@ mod reminders;
 mod state;
 
 use capture::{ActiveWinProvider, WindowProvider};
-use commands::assistant::{
-    ai_available, ai_day_digest, ai_day_review, ai_pull_model, ai_status, start_ollama,
-};
+use commands::assistant::ai_day_digest;
 use commands::config::{
-    categorize_pending, get_focus_time, get_mcp_info, get_ocr_enabled, get_setting,
+    get_extension_last_event, get_focus_time, get_mcp_info, get_ocr_enabled, get_setting,
     log_focus_time, log_pomodoro, run_ocr_selftest, set_ocr_enabled, set_setting,
 };
 use commands::focus::{check_focus, get_focus, set_focus, set_focus_judgment};
@@ -137,9 +134,6 @@ pub fn run() {
                 last_real_window: std::sync::Mutex::new(None),
             });
 
-            // Tenta ligar o Ollama sozinho (best-effort; se não tiver, ignora).
-            commands::assistant::try_start_ollama();
-
             // API local (127.0.0.1) que recebe os tab-events da extensão de
             // browser — a fonte de URL que funciona no Opera GX/Windows. O
             // sampler consulta o feed na troca de janela. Retenção: o cru de
@@ -252,12 +246,7 @@ pub fn run() {
             get_paused,
             set_paused,
             get_day_insights,
-            ai_available,
-            ai_day_review,
             ai_day_digest,
-            ai_status,
-            ai_pull_model,
-            start_ollama,
             add_note,
             list_notes,
             delete_note,
@@ -276,9 +265,9 @@ pub fn run() {
             set_ocr_enabled,
             run_ocr_selftest,
             get_mcp_info,
+            get_extension_last_event,
             get_setting,
             set_setting,
-            categorize_pending,
             log_focus_time,
             log_pomodoro,
             get_focus_time

@@ -23,7 +23,12 @@ export function IntentionCascade() {
   useEffect(() => {
     loadIntention();
     const id = setInterval(loadIntention, 8000); // reflete quando você define/troca
-    return () => clearInterval(id);
+    // Definiu no ritual/diário → aparece AQUI na hora, sem esperar o poll.
+    window.addEventListener("focusbar:notes-changed", loadIntention);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("focusbar:notes-changed", loadIntention);
+    };
   }, []);
 
   async function addStep() {

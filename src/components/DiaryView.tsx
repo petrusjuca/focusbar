@@ -26,11 +26,13 @@ export function DiaryView() {
     await invoke("add_note", { text: text.trim(), kind, day: null });
     setText("");
     refresh();
+    window.dispatchEvent(new CustomEvent("focusbar:notes-changed"));
   }
 
   async function del(id: number) {
     await invoke("delete_note", { id });
     refresh();
+    window.dispatchEvent(new CustomEvent("focusbar:notes-changed"));
   }
 
   const intentions = notes.filter((n) => n.kind === "intention");

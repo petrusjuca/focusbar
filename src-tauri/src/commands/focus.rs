@@ -1,4 +1,3 @@
-use crate::ai;
 use crate::capture::browser;
 use crate::capture::{ActiveWinProvider, WindowProvider};
 use crate::category::categorize;
@@ -281,41 +280,28 @@ pub async fn check_focus(state: State<'_, AppState>) -> Result<FocusCheck, Strin
         }
     }
 
-    // 2) IA julga pelo CONTEÚDO — mas ANCORADA: ela precisa copiar um trecho
-    //    real da tela como prova. Se o trecho não existir de verdade (modelo
-    //    inventou pela "funcionalidade" do app), DESCARTAMOS o veredito e caímos
-    //    no fallback determinístico. Assim a IA só "fala" o que dá pra comprovar.
-    if let Ok(j) = ai::on_task_check(&focus, &app, &title, &extra).await {
-        let ev = j.evidence.trim();
-        let grounded = ev.len() >= 3
-            && ev.to_lowercase() != "nada"
-            && fold(&format!("{} {}", title, extra)).contains(&fold(ev));
-        if grounded {
-            return Ok(store(Some(j.on_task), format!("Vi na tela: \"{}\".", ev), "ia"));
-        }
-        // Sem prova verificável → a IA não ancorou. Ignora e segue pro fallback.
-    }
-
-    // 3) Sem Ollama: antes da regra burra, reaproveita o texto que JÁ lemos
-    //    (OCR/AX) — se o conteúdo cita o foco, é um palpite informado de "no foco".
+    // 2) O conteúdo lido da tela (AX/OCR) cita o foco? Julga sem LLM nenhum.
+    //    (Decisão D2: ao vivo só camadas baratas e verificáveis — o julgamento
+    //    PROFUNDO é do Claude via MCP, no fim do dia, com contexto de verdade.)
     if let Some(kw) = focus_keyword_in(&focus, &fold(&extra)) {
         return Ok(store(
             Some(true),
-            format!("O conteúdo mostra \"{}\" (sem Ollama, é um palpite).", kw),
+            format!("O que está na tela cita \"{}\".", kw),
             "match",
         ));
     }
 
-    // 4) Último recurso: regra pela categoria do app (estimativa honesta).
+    // 3) Último recurso: regra pela categoria do app (estimativa honesta —
+    //    e é ela que você corrige com 1 clique, virando regra pra sempre).
     let on_task = cat != "Procrastinação";
     let reason = if on_task {
         format!(
-            "Pela categoria, {} costuma ser trabalho — mas é só estimativa. Ligue o Ollama (aba Assistente) pra eu julgar pelo conteúdo.",
+            "Pela categoria, {} costuma ser trabalho — se não for, me corrige aqui que eu aprendo.",
             app
         )
     } else {
         format!(
-            "Pela categoria, {} costuma ser distração — mas é só estimativa. Ligue o Ollama (aba Assistente) pra eu julgar pelo conteúdo.",
+            "Pela categoria, {} costuma ser distração — se estiver te ajudando, me corrige aqui que eu aprendo.",
             app
         )
     };

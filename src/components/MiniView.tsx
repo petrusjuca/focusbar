@@ -46,9 +46,12 @@ export function MiniView({
     }
     load();
     const id = setInterval(load, 20000);
+    // Definiu a intenção no ritual/diário → reflete no mini na hora.
+    window.addEventListener("focusbar:notes-changed", load);
     return () => {
       on = false;
       clearInterval(id);
+      window.removeEventListener("focusbar:notes-changed", load);
     };
   }, []);
 
