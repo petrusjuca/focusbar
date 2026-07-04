@@ -71,7 +71,9 @@ export function McpSettings() {
       </div>
 
       <p className="ai-card-text" style={{ marginTop: "0.5rem", opacity: 0.8 }}>
-        Ferramentas: resumo do dia, blocos do dia, pomodoros e resumo da semana.
+        Ferramentas: recap do dia (dossiê completo), standup (ontem+hoje pronto
+        pra colar), resumo/blocos/pomodoros do dia, resumo da semana — e
+        corrigir categoria (o Claude conserta o histórico na conversa).
       </p>
 
       {err && <p className="error">{err}</p>}
