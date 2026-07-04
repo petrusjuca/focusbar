@@ -23,7 +23,6 @@ import { MiniView } from "./components/MiniView";
 import { SelfCheck } from "./components/SelfCheck";
 import { Onboarding } from "./components/Onboarding";
 import { DayRituals } from "./components/DayRituals";
-import { IntentionCascade } from "./components/IntentionCascade";
 import { MetricsPanel } from "./components/MetricsPanel";
 import { DiaryView } from "./components/DiaryView";
 import { TodoView } from "./components/TodoView";
@@ -44,7 +43,7 @@ const WeeklyView = lazy(() =>
 
 const chartFallback = <div className="loading-state">carregando gráfico…</div>;
 
-type Tab = "hoje" | "semana" | "assistente" | "lembretes" | "dados";
+type Tab = "hoje" | "semana" | "config" | "lembretes" | "dados";
 
 function App() {
   const [tab, setTab] = useState<Tab>("hoje");
@@ -450,13 +449,13 @@ function App() {
           className={tab === "semana" ? "tab active" : "tab"}
           onClick={() => setTab("semana")}
         >
-          Semana
+          Análise da Semana
         </button>
         <button
-          className={tab === "assistente" ? "tab active" : "tab"}
-          onClick={() => setTab("assistente")}
+          className={tab === "config" ? "tab active" : "tab"}
+          onClick={() => setTab("config")}
         >
-          Assistente
+          Configurações
         </button>
         <button
           className={tab === "lembretes" ? "tab active" : "tab"}
@@ -480,8 +479,15 @@ function App() {
         <RemindersView />
       ) : tab === "dados" ? (
         <MetricsPanel session={session} />
-      ) : tab === "assistente" ? (
-        <AssistantView />
+      ) : tab === "config" ? (
+        <AssistantView
+          mode={mode}
+          onMode={setMode}
+          theme={theme}
+          onToggleTheme={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+          autostart={autostart}
+          onToggleAutostart={toggleAutostart}
+        />
       ) : tab === "semana" ? (
         weekly ? (
           <Suspense fallback={chartFallback}>
@@ -499,8 +505,8 @@ function App() {
           {/* Núcleo acionável (TDAH: o que importa AGORA, sem rolagem infinita) */}
           <FocusBar />
           <FocusSessionCard session={session} />
-          {/* Cascata: intenção do dia → quebra em tarefas (os passos) ↓ */}
-          <IntentionCascade />
+          {/* (A cascata "intenção → um passo" saiu — decisão FLOWMODE: a
+              intenção vive no ritual da manhã e no mini; tarefas vivem aqui.) */}
           <TodoView onFocusTask={focusTask} />
           <InsightsPanel insights={dayInsights} />
           <DedicationToday refreshKey={session.pomodoros} />
@@ -601,44 +607,10 @@ function App() {
         </>
       )}
 
-      <div className="mode-select">
-        <span className="mode-label">modo de hoje:</span>
-        {[
-          ["companheiro", "🤝 companheiro"],
-          ["foco", "🎯 foco"],
-          ["dia_ruim", "🌧️ dia ruim"],
-        ].map(([v, l]) => (
-          <button
-            key={v}
-            className={mode === v ? "mode-btn active" : "mode-btn"}
-            onClick={() => setMode(v)}
-            title={
-              v === "dia_ruim"
-                ? "sem cobranças hoje — o app fica quieto e gentil"
-                : v === "foco"
-                  ? "te puxa mais cedo quando dispersa"
-                  : "equilíbrio: te acompanha sem encher"
-            }
-          >
-            {l}
-          </button>
-        ))}
-      </div>
+      {/* (Modo de hoje, tema e autostart moraram aqui embaixo; agora vivem em
+          Configurações — decisão FLOWMODE: "somente lá", com as diferenças
+          dos modos explicadas por extenso.) */}
       <footer className="footer">
-        <button
-          className="mini-toggle"
-          onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
-        >
-          {theme === "dark" ? "☀️ Tema claro" : "🌙 Tema escuro"}
-        </button>
-        <label className="autostart">
-          <input
-            type="checkbox"
-            checked={autostart}
-            onChange={toggleAutostart}
-          />
-          iniciar com o sistema
-        </label>
         <span className="bg-note">
           fechar a janela mantém o rastreamento rodando (ícone na barra de menu)
         </span>

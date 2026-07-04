@@ -1,5 +1,18 @@
 # focusbar — o que mudou
 
+## v0.7.1 — reorganização FLOWMODE (telas no lugar do teu mapa mental)
+- **"Assistente" virou "Configurações"** (o nome antigo era misleading) e
+  "Semana" virou "Análise da Semana". Ordem das abas segue o planejamento.
+- **Modos do dia com as diferenças POR EXTENSO** em cards dentro de
+  Configurações (companheiro ~20min · foco ~10min · dia ruim = silêncio) —
+  nada de decorar; tema claro e "iniciar com o sistema" também moraram pra lá.
+- **Saiu a cascata "intenção → um passo"** do Hoje (decisão FLOWMODE: a
+  intenção vive no ritual da manhã e no mini; tarefas vivem na lista).
+- **Campo de tempo livre GRANDE** no Modo Foco (dá pra enxergar o que digita).
+- **Fim de timer chamativo:** o card pulsa e o relógio pisca quando o tempo
+  cumpre (e na volta da pausa) — pra não passar batido.
+
+
 ## v0.7.0 — o cérebro é o Claude (Ollama removido) + intenção que não some
 - **Ollama removido de vez** (decisão D2 / pedido do João): o app não roda LLM
   local. Ao vivo, o juiz de foco usa só camadas confiáveis — regra que você

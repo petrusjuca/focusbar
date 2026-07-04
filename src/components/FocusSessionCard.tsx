@@ -72,7 +72,7 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
         <div className="session-custom">
           <input
             className="session-custom-input"
-            placeholder="ex: 1h30, 90, 25:00"
+            placeholder="tempo livre: 1h30, 90, 25:00…"
             value={custom}
             onChange={(e) => setCustom(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && beginCustom()}
@@ -102,7 +102,7 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
     <div
       className={`session-card running ${isBreak || isBreakOver ? "brk" : "foc"}${
         blockPaused ? " frozen" : ""
-      }`}
+      }${isOver || isBreakOver ? " ended" : ""}`}
     >
       <div className="session-card-top">
         <span className="session-card-title">{title}</span>

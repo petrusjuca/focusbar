@@ -60,7 +60,7 @@ export function SelfCheck() {
       ok: !ocrOn || ocrWorks !== false,
       label: "visão profunda (OCR lê a tela)",
       hint: screen
-        ? "OCR ligado mas não consegui LER a tela no último teste. Vá em Assistente → OLHOS → 'Testar os olhos agora'."
+        ? "OCR ligado mas não consegui LER a tela no último teste. Vá em Configurações → OLHOS → 'Testar os olhos agora'."
         : "OCR ligado mas sem Gravação de Tela. Clique pra conceder (reabra o app depois).",
       fix: () => invoke("request_screen_recording"),
     },

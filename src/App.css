@@ -2609,3 +2609,77 @@ html[data-theme="light"] .agent {
   display: flex;
   gap: 0.9rem;
 }
+
+/* ===== Reorganização FLOWMODE (04.07) ===== */
+
+/* Configurações → cards de modo com as diferenças POR EXTENSO (Rev4 #17) */
+.mode-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem;
+}
+.mode-card {
+  text-align: left;
+  padding: 0.7rem 0.8rem;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+.mode-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+}
+.mode-card-name {
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+}
+.mode-card-on {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+.mode-card-what {
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+.mode-card-when {
+  font-size: 0.75rem;
+  opacity: 0.65;
+  margin-top: 0.35rem;
+}
+
+/* Configurações → geral (tema + autostart, movidos do rodapé) */
+.settings-general {
+  display: flex;
+  align-items: center;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+
+/* Campo de tempo livre GRANDE (FLOWMODE: "enxergar o tempo que está sendo
+   colocado" — o antigo tinha 64px) */
+.session-custom-input {
+  width: 180px;
+  font-size: 1.05rem;
+  padding: 0.5rem 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Fim de timer BEM visível (FLOWMODE: perceber que acabou, não passar batido) */
+@keyframes ended-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(52, 199, 89, 0.55); }
+  50% { box-shadow: 0 0 0 10px rgba(52, 199, 89, 0); }
+}
+.session-card.ended {
+  animation: ended-pulse 1.2s ease-in-out infinite;
+  border-color: var(--accent);
+}
+.session-card.ended .session-clock {
+  animation: ended-blink 1.2s step-end infinite;
+}
+@keyframes ended-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.45; }
+}
