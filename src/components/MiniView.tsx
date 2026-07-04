@@ -6,6 +6,7 @@ import type { FocusCheck } from "../types";
 import type { FocusSessionApi } from "../hooks/useFocusSession";
 import { fmtClock } from "../format";
 import { useTodos } from "../hooks/useTodos";
+import { TimerRing } from "./TimerRing";
 
 const CARD_W = 268;
 
@@ -219,7 +220,19 @@ export function MiniView({
 
         {running ? (
           <div className="agent-timer">
-            <div className="agent-clock">{clock}</div>
+            {/* Círculo estilo timer do Google (Rev4 #3): o arco esvazia com o
+                tempo; no overtime fica cheio e o card já pisca. */}
+            <TimerRing
+              fraction={
+                isOver || isBreakOver
+                  ? 1
+                  : session.total > 0
+                    ? session.remaining / session.total
+                    : 0
+              }
+            >
+              <div className="agent-clock">{clock}</div>
+            </TimerRing>
             {(isFocus || isOver) && focus && (
               <div className="agent-focus" title={focus}>
                 {focus}

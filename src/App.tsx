@@ -75,6 +75,8 @@ function App() {
   const [prevSize, setPrevSize] = useState<{ w: number; h: number } | null>(null);
   const [confirmDel, setConfirmDel] = useState<number | null>(null);
   const [showDetails, setShowDetails] = useState<boolean>(false);
+  // Revisão guiada do "Outro" (FLOWMODE: meta é Outro < 5% do dia).
+  const [reviewOther, setReviewOther] = useState<boolean>(false);
   const session = useFocusSession();
 
   // Tarefa → Foco: define o foco e inicia um bloco Pomodoro JÁ naquela tarefa.
@@ -511,6 +513,39 @@ function App() {
           <InsightsPanel insights={dayInsights} />
           <DedicationToday refreshKey={session.pomodoros} />
 
+          {/* FLOWMODE: "Outro" acima de 5% = o sistema não sabe onde teu tempo
+              foi. O aviso puxa a revisão guiada; cada correção vira memória. */}
+          {(() => {
+            const total = categories.reduce((a, c) => a + c.total_secs, 0);
+            const outro = categories.find((c) => c.category === "Outro")?.total_secs ?? 0;
+            const pct = total > 0 ? Math.round((outro * 100) / total) : 0;
+            if (pct <= 5 || outro < 600) return null;
+            return (
+              <div className="other-alert">
+                <span>
+                  ⚠ <b>{pct}%</b> do teu dia está em <b>"Outro"</b> — eu ainda não
+                  sei o que foi. Me ensina? (cada correção vale pra sempre)
+                </span>
+                <button
+                  className="grant-btn"
+                  onClick={() => {
+                    setShowDetails(true);
+                    setReviewOther(true);
+                    setTimeout(
+                      () =>
+                        document
+                          .querySelector(".blocks")
+                          ?.scrollIntoView({ behavior: "smooth" }),
+                      120
+                    );
+                  }}
+                >
+                  revisar agora
+                </button>
+              </div>
+            );
+          })()}
+
           {/* Detalhes do dia — recolhidos por padrão pra não sobrecarregar */}
           <button
             className="details-toggle"
@@ -534,6 +569,8 @@ function App() {
               <FocusTimeline sessions={daySessions} markers={dayMarkers} />
               <SessionBlocks
                 sessions={daySessions}
+                reviewOther={reviewOther}
+                onExitReview={() => setReviewOther(false)}
                 onChanged={async () => {
                   // Recarrega só o que a correção muda: blocos + resumo por categoria.
                   const [dayS, cats] = await Promise.all([

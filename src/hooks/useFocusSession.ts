@@ -60,6 +60,7 @@ function playChime(rising: boolean) {
 export interface FocusSessionApi {
   phase: SessionPhase;
   remaining: number; // segundos restantes na contagem regressiva (focus/break)
+  total: number; // total da contagem corrente (foco planejado / pausa) — pro anel
   over: number; // segundos PASSADOS do fim (overtime/break_over)
   goal: string;
   blockPaused: boolean;
@@ -96,6 +97,8 @@ export function useFocusSession(): FocusSessionApi {
   const pomRef = useRef(0);
   const skipRef = useRef(0);
   const dayRef = useRef(today());
+  // Total da PAUSA corrente (pausa + extensões) — pro anel de progresso.
+  const breakTotalRef = useRef(BREAK_SECS);
 
   function persist() {
     try {
@@ -178,6 +181,7 @@ export function useFocusSession(): FocusSessionApi {
 
   function enterBreak() {
     endsAtRef.current = Date.now() + BREAK_SECS * 1000;
+    breakTotalRef.current = BREAK_SECS;
     setBP(false);
     setOver(0);
     setPhase("break");
@@ -395,6 +399,7 @@ export function useFocusSession(): FocusSessionApi {
         setPhase("break");
       }
       endsAtRef.current = (p === "break" ? endsAtRef.current : Date.now()) + add * 1000;
+      breakTotalRef.current += add;
     } else {
       return;
     }
@@ -404,6 +409,10 @@ export function useFocusSession(): FocusSessionApi {
   return {
     phase,
     remaining,
+    total:
+      phase === "break" || phase === "break_over"
+        ? breakTotalRef.current
+        : plannedRef.current,
     over,
     goal,
     blockPaused,

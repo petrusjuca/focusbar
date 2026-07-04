@@ -2683,3 +2683,59 @@ html[data-theme="light"] .agent {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.45; }
 }
+
+/* Anel estilo timer do Google (Rev4 #3) */
+.timer-ring {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  margin: 0 auto;
+}
+.timer-ring svg {
+  position: absolute;
+  inset: 0;
+}
+.timer-ring-center {
+  position: relative;
+  text-align: center;
+  max-width: 82%;
+}
+/* Dígitos dimensionados pro círculo (o tamanho antigo estourava o anel) */
+.timer-ring .agent-clock {
+  font-size: 2.2rem;
+}
+.timer-ring .session-clock {
+  font-size: 2rem;
+}
+.session-ring {
+  display: flex;
+  justify-content: center;
+  margin: 0.4rem 0;
+}
+/* Cores por fase: pausa = tom de descanso; dispersão = alerta */
+.session-card.brk .timer-ring,
+.agent.break .timer-ring {
+  color: var(--warn);
+}
+.agent.warn .timer-ring {
+  color: var(--warn);
+}
+
+/* Alerta "Outro > 5%" (FLOWMODE) — o sistema pede pra ser ensinado */
+.other-alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--warn, #e6a23c);
+  border-radius: 12px;
+  margin: 0.6rem 0;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+.other-alert .grant-btn {
+  flex-shrink: 0;
+}

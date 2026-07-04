@@ -1,5 +1,16 @@
 # focusbar — o que mudou
 
+## v0.8.0 — timer do Google + revisão do "Outro"
+- **Anel de progresso estilo timer do Google** (pedido do João, Rev4 #3): o
+  círculo esvazia conforme o tempo passa, dígitos grandes no centro — no mini
+  E no card do Modo Foco. Pausa muda a cor; no overtime o anel fica cheio e o
+  card pisca.
+- **Meta: "Outro" < 5% do dia.** Quando passa disso, o Hoje mostra um aviso
+  ("X% do teu dia está em Outro — me ensina?") que abre a REVISÃO GUIADA: só
+  os blocos sem categoria clara, maiores primeiro, corrige no toque e cada
+  correção vira memória permanente. É o que faz o recap do Claude melhorar
+  sozinho, dia após dia.
+
 ## v0.7.1 — reorganização FLOWMODE (telas no lugar do teu mapa mental)
 - **"Assistente" virou "Configurações"** (o nome antigo era misleading) e
   "Semana" virou "Análise da Semana". Ordem das abas segue o planejamento.

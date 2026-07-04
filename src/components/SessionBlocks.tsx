@@ -15,17 +15,28 @@ const MIN_SECS = 60;
 export function SessionBlocks({
   sessions,
   onChanged,
+  reviewOther = false,
+  onExitReview,
 }: {
   sessions: FocusSession[];
   onChanged?: () => void;
+  /** Revisão guiada do "Outro" (FLOWMODE): só os blocos sem categoria clara,
+   *  maiores primeiro — você ensina e a meta é Outro voltar pra < 5%. */
+  reviewOther?: boolean;
+  onExitReview?: () => void;
 }) {
   const [busy, setBusy] = useState<number | null>(null);
 
   // O cálculo da fronteira usa a lista cheia (índice real); só o display filtra.
-  const visible = sessions
+  let visible = sessions
     .map((s, i) => ({ s, i }))
     .filter(({ s }) => s.duration_secs >= MIN_SECS);
-  if (visible.length === 0) return null;
+  if (reviewOther) {
+    visible = visible
+      .filter(({ s }) => !s.category_ai || s.category_ai === "Outro")
+      .sort((a, b) => b.s.duration_secs - a.s.duration_secs);
+  }
+  if (visible.length === 0 && !reviewOther) return null;
 
   async function setCat(i: number, category: string) {
     const block = sessions[i];
@@ -50,9 +61,26 @@ export function SessionBlocks({
   return (
     <section className="blocks">
       <div className="daily-header">
-        <span>BLOCOS DE HOJE</span>
-        <span className="daily-day">categoria errada? ajuste no toque</span>
+        <span>{reviewOther ? "REVISÃO DO “OUTRO”" : "BLOCOS DE HOJE"}</span>
+        <span className="daily-day">
+          {reviewOther ? (
+            <>
+              me diga o que era cada um — maiores primeiro{" "}
+              <button className="link-btn" onClick={onExitReview}>
+                ✓ pronto
+              </button>
+            </>
+          ) : (
+            "categoria errada? ajuste no toque"
+          )}
+        </span>
       </div>
+      {reviewOther && visible.length === 0 && (
+        <p className="bg-note">
+          🎉 Nada pendente — tudo que tinha peso já tem categoria. O "Outro" que
+          sobrou são fragmentos de menos de 1 minuto.
+        </p>
+      )}
       <div className="block-list">
         {visible.map(({ s, i }) => {
           const cat = s.category_ai ?? "";

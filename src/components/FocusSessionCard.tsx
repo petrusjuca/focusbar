@@ -2,6 +2,7 @@ import { useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { fmtClock, parseDuration } from "../format";
 import type { FocusSessionApi } from "../hooks/useFocusSession";
+import { TimerRing } from "./TimerRing";
 
 // Card do Modo Foco — fluxo do mundo real: foco → overtime (conta pra tarefa) →
 // pausa → pós-pausa. Cada transição é confirmada por você, nada automático.
@@ -109,7 +110,20 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
         <span className="pomos" title="pomodoros concluídos hoje">🍅 {pomodoros}</span>
       </div>
       {(isFocus || isOver) && goal && <div className="session-goal">🎯 {goal}</div>}
-      <div className="session-clock">{clock}</div>
+      <div className="session-ring">
+        <TimerRing
+          size={140}
+          fraction={
+            isOver || isBreakOver
+              ? 1
+              : session.total > 0
+                ? remaining / session.total
+                : 0
+          }
+        >
+          <div className="session-clock">{clock}</div>
+        </TimerRing>
+      </div>
       {isOver && (
         <p className="session-hint">
           passou do tempo — isso conta pra tarefa até você iniciar a pausa
