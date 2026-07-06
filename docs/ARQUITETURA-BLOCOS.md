@@ -32,7 +32,7 @@
 | 2.3 `pomodoro_log` | ✅ | goal, início, planejado, real, cumpriu? |
 | 2.4 `todos` / `notes`(intenção) / `settings` | ✅ | |
 | 2.5 Tabela BRUTA separada (re-derivável) | 🟠 | `tab_events` (v0.5.0) é o embrião: eventos crus de aba com retenção 90d. Falta generalizar pra eventos de janela/estado (fase do derivador) |
-| 2.6 Screenshots salvos em disco | 🔵 | **HOJE NÃO SALVA (por privacidade)**. Revisão4 #16 pede pra salvar (estilo screenpipe). DECISÃO DE PRODUTO — trade-off privacidade × análise posterior |
+| 2.6 Screenshots salvos em disco | ✅ | D1 executada (v0.9.0, 04.07): 1 shot/sessão, local, retenção 48h + auto-limpeza, toggle em Configurações, 📸 nos blocos. Zonas de exclusão nunca capturadas |
 
 ## CAMADA 3 — ENTENDIMENTO (o cérebro)
 
@@ -142,7 +142,7 @@
 | 13 | "Maior ladrão" → Claude/MCP no fim do dia | 🟠 alinhado, falta fazer |
 | 14 | Tirar diário/nota rápida | 🔵 pendente |
 | 15 | Não usa screenpipe (PII próprio) | ✅ confirmado — captura própria, regex próprio |
-| 16 | "Garantir que salva screenshots" | 🔵 **CONFLITO**: hoje NÃO salva por design. Decidir |
+| 16 | "Garantir que salva screenshots" | ✅ v0.9.0 — retenção curta (48h), toggle, default ligado |
 | 17 | Diferença entre os modos | 🟠 documentado acima; refinar |
 | 18 | Cores da timeline | ⬜ ajustar |
 | 19 | Deletar "Analisar no Claude web" pós-MCP | 🔵 pendente |
