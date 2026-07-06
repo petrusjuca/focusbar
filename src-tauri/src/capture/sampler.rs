@@ -50,6 +50,8 @@ struct OpenSession {
     /// Linha desta sessão no banco (HEARTBEAT, Fase B): criada quando a sessão
     /// se firma (>=2s) e estendida a cada batida. None = ainda curta demais.
     row_id: Option<i64>,
+    /// Screenshot salvo desta sessão (D1) — vai pro banco no fechamento.
+    shot_path: Option<String>,
 }
 
 fn now_ts() -> i64 {
@@ -100,6 +102,7 @@ pub fn spawn(
     db: Arc<Mutex<Connection>>,
     paused: Arc<AtomicBool>,
     tab_feed: Arc<TabFeed>,
+    shots_dir: std::path::PathBuf,
 ) {
     thread::spawn(move || {
         let provider = ActiveWinProvider;
@@ -186,7 +189,12 @@ pub fn spawn(
                             Some(id) => {
                                 if end - prev.start_ts >= MIN_SESSION_SECS {
                                     let _ = db::finish_session(
-                                        &conn, id, end, is_idle, prev.content.as_deref(),
+                                        &conn,
+                                        id,
+                                        end,
+                                        is_idle,
+                                        prev.content.as_deref(),
+                                        prev.shot_path.as_deref(),
                                     );
                                 } else {
                                     let _ = db::delete_session(&conn, id);
@@ -259,6 +267,7 @@ pub fn spawn(
                             content: None,
                             content_done: false,
                             row_id: None,
+                            shot_path: None,
                         });
                     }
                 }
@@ -314,26 +323,47 @@ pub fn spawn(
                     if chrome_frame {
                         text = crate::capture::browser::clean_browser_title(&cur.raw_title);
                     }
+                    let (ocr_on, shots_on) = {
+                        let g = db.lock().ok();
+                        let get = |k: &str| {
+                            g.as_ref()
+                                .and_then(|c| db::get_setting(c, k).ok())
+                                .flatten()
+                                .map(|v| v == "1")
+                                .unwrap_or(false)
+                        };
+                        (get("ocr_enabled"), get("shots_enabled"))
+                    };
+                    // UM frame por sessão, reaproveitado: vira o SHOT (D1 —
+                    // retenção 48h, "ver em que aba estava") e alimenta o OCR.
+                    // Captura pelo PID DESTA sessão (não "quem está em foco") —
+                    // nunca fotografa um app sensível que roubou o foco no meio.
+                    let frame = if shots_on || ((chrome_frame || content_is_weak(&text)) && ocr_on)
+                    {
+                        crate::capture::screen::frame_for_session(cur.pid)
+                    } else {
+                        None
+                    };
+                    if shots_on {
+                        if let Some(f) = frame.as_ref() {
+                            cur.shot_path = crate::capture::screen::save_shot(
+                                &shots_dir,
+                                f,
+                                cur.start_ts,
+                                &cur.label_app,
+                            );
+                        }
+                    }
                     if chrome_frame || content_is_weak(&text) {
-                        let ocr_on = db
-                            .lock()
-                            .ok()
-                            .and_then(|c| db::get_setting(&c, "ocr_enabled").ok())
-                            .flatten()
-                            .map(|v| v == "1")
-                            .unwrap_or(false);
                         // NÃO confia no preflight de permissão (no macOS ele mente —
                         // retorna "negado" mesmo concedido). Só TENTA o OCR: se há
                         // permissão, funciona; se não, a captura falha sozinha e cai
                         // no título limpo. É o que o screenpipe faz: tenta sempre.
                         if ocr_on {
-                            if let Some(rt) = ocr_rt.as_ref() {
-                                // Captura pela janela do PID DESTA sessão (cur.pid),
-                                // não "a em foco agora" — o block_on leva segundos e
-                                // o foco pode trocar pra um app sensível no meio.
-                                if let Some(t) = rt.block_on(
-                                    crate::capture::screen::ocr_window_by_pid(cur.pid),
-                                ) {
+                            if let (Some(rt), Some(f)) = (ocr_rt.as_ref(), frame) {
+                                if let Some(t) =
+                                    rt.block_on(crate::capture::screen::ocr_frame(f))
+                                {
                                     text = crate::redact::redact(&t);
                                 }
                             }

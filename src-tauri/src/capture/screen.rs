@@ -128,6 +128,63 @@ pub async fn ocr_window_by_pid(pid: i32) -> Option<String> {
     ocr_image(rgba).await
 }
 
+/// Captura da janela pra SHOT + OCR num frame só (o sampler usa: uma captura
+/// por sessão estável, reaproveitada pros dois fins).
+pub fn frame_for_session(pid: i32) -> Option<image::RgbaImage> {
+    capture_for_ocr(pid)
+}
+
+/// OCR de um frame JÁ capturado (evita fotografar duas vezes).
+pub async fn ocr_frame(rgba: image::RgbaImage) -> Option<String> {
+    ocr_image(rgba).await
+}
+
+/// D1 (decisão 04.07, pedido do João #16): salva o frame da sessão em disco,
+/// LOCAL, pra "ver em que aba estava". Retenção curta (48h, ver purge) e
+/// toggle em Configurações. Zonas de exclusão nunca chegam aqui — o sampler
+/// barra antes. Reduz pra <=1280px e grava JPEG q70 (~100-200KB por shot).
+pub fn save_shot(
+    dir: &std::path::Path,
+    rgba: &image::RgbaImage,
+    ts: i64,
+    app: &str,
+) -> Option<String> {
+    std::fs::create_dir_all(dir).ok()?;
+    let img = image::DynamicImage::ImageRgba8(rgba.clone());
+    let img = if img.width() > 1280 {
+        img.resize(1280, 4096, image::imageops::FilterType::Triangle)
+    } else {
+        img
+    };
+    let safe: String = app
+        .chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .take(24)
+        .collect();
+    let path = dir.join(format!("{ts}-{safe}.jpg"));
+    let file = std::fs::File::create(&path).ok()?;
+    let mut enc = image::codecs::jpeg::JpegEncoder::new_with_quality(file, 70);
+    enc.encode_image(&img.to_rgb8()).ok()?;
+    Some(path.to_string_lossy().into_owned())
+}
+
+/// Auto-limpeza da retenção: apaga shots mais velhos que `keep_secs`.
+pub fn purge_old_shots(dir: &std::path::Path, keep_secs: u64) {
+    let Ok(entries) = std::fs::read_dir(dir) else { return };
+    let now = std::time::SystemTime::now();
+    for e in entries.flatten() {
+        let old = e
+            .metadata()
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|t| now.duration_since(t).ok())
+            .is_some_and(|d| d.as_secs() > keep_secs);
+        if old {
+            let _ = std::fs::remove_file(e.path());
+        }
+    }
+}
+
 /// OCR da TELA CHEIA (monitor principal) — pro botão "testar os olhos": prova,
 /// na hora, que o screenshot+OCR estão vivos nesta máquina. Imagem em memória.
 pub async fn ocr_primary_monitor() -> Option<String> {

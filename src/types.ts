@@ -17,6 +17,7 @@ export interface FocusSession {
   was_idle_trimmed: boolean;
   category_ai: string | null; // categoria pela IA via conteúdo (não pelo app)
   activity_ai: string | null; // nome curto da atividade ("Estudando Cálculo")
+  shot_path: string | null; // screenshot da sessão (D1, retenção 48h)
 }
 
 // Intervalo de ausência de dado real (todo minuto com dono na timeline).

@@ -1,5 +1,15 @@
 # focusbar — o que mudou
 
+## v0.9.0 — screenshots com retenção curta (decisão D1 executada)
+- **"Ver em que aba estava" existe agora:** o app salva UM screenshot por
+  sessão estável (a mesma captura que alimenta o OCR — nada de fotografar
+  duas vezes), local, e cada bloco do dia ganha um 📸 que abre a imagem.
+- **Retenção curta por contrato:** os shots somem sozinhos em 48h (varrida no
+  startup e a cada 6h). Zonas de exclusão (banco/senha) continuam NUNCA sendo
+  capturadas, e o toggle fica em Configurações → Olhos.
+- É a matéria-prima pro julgamento por conteúdo: o Claude (e uma futura
+  camada multimodal) passa a ter o que olhar quando o texto não bastar.
+
 ## v0.8.1 — timer clicável, timeline com UMA linguagem de cor, diário fora
 - **Clica no relógio e digita o tempo** (igual o timer do Google): "10",
   "1h30", "25:00" — Enter e o restante vira exatamente isso, no mini e no

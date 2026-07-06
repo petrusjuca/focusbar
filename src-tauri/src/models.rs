@@ -24,6 +24,8 @@ pub struct FocusSession {
     pub category_ai: Option<String>,
     /// Nome curto da atividade deduzido do conteúdo ("Estudando Cálculo").
     pub activity_ai: Option<String>,
+    /// Screenshot da sessão em disco (D1: retenção 48h) — "ver em que aba estava".
+    pub shot_path: Option<String>,
 }
 
 /// Total de tempo por app num intervalo. `category` = override do usuário ou "".

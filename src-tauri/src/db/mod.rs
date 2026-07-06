@@ -19,6 +19,7 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
     // se já existir, o erro é ignorado — efeito idempotente).
     for col in [
         "ALTER TABLE focus_events ADD COLUMN content TEXT",
+        "ALTER TABLE focus_events ADD COLUMN shot_path TEXT",
         "ALTER TABLE focus_events ADD COLUMN category_ai TEXT",
         "ALTER TABLE focus_events ADD COLUMN activity_ai TEXT",
     ] {
@@ -88,7 +89,8 @@ pub(crate) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             was_idle_trimmed INTEGER NOT NULL DEFAULT 0,
             content          TEXT,  -- trecho REDIGIDO do que estava na tela (pra IA entender)
             category_ai      TEXT,  -- categoria pela IA via CONTEUDO (nao pelo nome do app)
-            activity_ai      TEXT   -- nome curto da atividade deduzida do conteudo
+            activity_ai      TEXT,  -- nome curto da atividade deduzida do conteudo
+            shot_path        TEXT   -- screenshot da sessao (D1, retencao 48h)
         );
         CREATE INDEX IF NOT EXISTS idx_focus_start ON focus_events(start_ts);
         CREATE INDEX IF NOT EXISTS idx_focus_app   ON focus_events(app_id, start_ts);
@@ -113,6 +115,9 @@ pub(crate) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         -- Windows (sem AX) e reforça no Mac. Idempotente — nunca sobrescreve a
         -- escolha do usuário (só semeia o default na 1ª criação).
         INSERT OR IGNORE INTO settings(key, value) VALUES ('ocr_enabled', '1');
+        -- D1 (04.07): screenshots da sessão LIGADOS por padrão (pedido #16 do
+        -- João) — local, retenção 48h, toggle em Configurações.
+        INSERT OR IGNORE INTO settings(key, value) VALUES ('shots_enabled', '1');
 
         CREATE TABLE IF NOT EXISTS focus_log (
             id   INTEGER PRIMARY KEY,
@@ -496,12 +501,14 @@ pub fn finish_session(
     end_ts: i64,
     idle_trimmed: bool,
     content: Option<&str>,
+    shot_path: Option<&str>,
 ) -> rusqlite::Result<()> {
     conn.execute(
         "UPDATE focus_events SET end_ts = ?2, duration_secs = ?2 - start_ts,
-            was_idle_trimmed = ?3, content = COALESCE(?4, content)
+            was_idle_trimmed = ?3, content = COALESCE(?4, content),
+            shot_path = COALESCE(?5, shot_path)
          WHERE rowid = ?1",
-        params![rowid, end_ts, idle_trimmed as i64, content],
+        params![rowid, end_ts, idle_trimmed as i64, content, shot_path],
     )?;
     Ok(())
 }
@@ -573,7 +580,7 @@ pub fn set_block_category(
 /// Últimas N sessões gravadas (mais recentes primeiro). Para debug/visualização.
 pub fn recent_sessions(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<FocusSession>> {
     let mut stmt = conn.prepare(
-        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid, f.category_ai, f.activity_ai
+        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid, f.category_ai, f.activity_ai, f.shot_path
          FROM focus_events f
          JOIN apps a ON a.id = f.app_id
          ORDER BY f.start_ts DESC
@@ -589,6 +596,7 @@ pub fn recent_sessions(conn: &Connection, limit: i64) -> rusqlite::Result<Vec<Fo
             id: r.get(5)?,
             category_ai: r.get(6)?,
             activity_ai: r.get(7)?,
+            shot_path: r.get(8)?,
         })
     })?;
     rows.collect()
@@ -679,7 +687,7 @@ pub fn sessions_in_range(
     end: i64,
 ) -> rusqlite::Result<Vec<FocusSession>> {
     let mut stmt = conn.prepare(
-        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid, f.category_ai, f.activity_ai
+        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid, f.category_ai, f.activity_ai, f.shot_path
          FROM focus_events f
          JOIN apps a ON a.id = f.app_id
          WHERE f.start_ts >= ?1 AND f.start_ts < ?2
@@ -695,6 +703,7 @@ pub fn sessions_in_range(
             id: r.get(5)?,
             category_ai: r.get(6)?,
             activity_ai: r.get(7)?,
+            shot_path: r.get(8)?,
         })
     })?;
     rows.collect()
@@ -707,7 +716,7 @@ pub fn longest_session(
     end: i64,
 ) -> rusqlite::Result<Option<FocusSession>> {
     conn.query_row(
-        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid, f.category_ai, f.activity_ai
+        "SELECT a.name, f.title, f.start_ts, COALESCE(f.duration_secs, 0), f.was_idle_trimmed, f.rowid, f.category_ai, f.activity_ai, f.shot_path
          FROM focus_events f
          JOIN apps a ON a.id = f.app_id
          WHERE f.start_ts >= ?1 AND f.start_ts < ?2
@@ -724,6 +733,7 @@ pub fn longest_session(
                 id: r.get(5)?,
                 category_ai: r.get(6)?,
                 activity_ai: r.get(7)?,
+                shot_path: r.get(8)?,
             })
         },
     )
@@ -744,6 +754,7 @@ mod tests {
             was_idle_trimmed: false,
             category_ai: None,
             activity_ai: None,
+            shot_path: None,
         }
     }
 
@@ -854,7 +865,7 @@ mod tests {
             .unwrap();
         assert_eq!((end, dur), (1010, 10));
         // Fechamento pode RECUAR (idle-trim) e grava conteúdo.
-        finish_session(&c, row, 1005, true, Some("texto da tela")).unwrap();
+        finish_session(&c, row, 1005, true, Some("texto da tela"), Some("/tmp/shot.jpg")).unwrap();
         let (end, dur, idle, content): (i64, i64, i64, Option<String>) = c
             .query_row(
                 "SELECT end_ts, duration_secs, was_idle_trimmed, content

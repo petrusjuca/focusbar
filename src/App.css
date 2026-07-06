@@ -2768,3 +2768,12 @@ html[data-theme="light"] .agent {
   font-variant-numeric: tabular-nums;
   padding: 0.15rem 0.3rem;
 }
+
+/* 📸 da sessão (D1) */
+.block-shot {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9rem;
+  padding: 0 0.2rem;
+}

@@ -52,6 +52,25 @@ fn get_active_window() -> Option<ActiveWindow> {
     ActiveWinProvider.current()
 }
 
+/// Abre o screenshot de uma sessão no visualizador do sistema. Só aceita
+/// arquivos DENTRO da pasta de shots do app — nada de abrir caminho arbitrário.
+#[tauri::command]
+fn open_shot(app: AppHandle, path: String) -> Result<(), String> {
+    use tauri_plugin_opener::OpenerExt;
+    let shots = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| e.to_string())?
+        .join("shots");
+    let p = std::path::Path::new(&path);
+    if !p.starts_with(&shots) || !p.exists() {
+        return Err("screenshot não existe mais (retenção de 48h)".into());
+    }
+    app.opener()
+        .open_path(path, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
 /// Está configurado para iniciar com o sistema?
 #[tauri::command]
 fn get_autostart(app: AppHandle) -> bool {
@@ -144,8 +163,20 @@ pub fn run() {
             let tab_feed = Arc::new(capture::tab_feed::TabFeed::new());
             api::spawn(db.clone(), tab_feed.clone());
 
+            // D1: screenshots da sessão (locais, "ver em que aba estava").
+            // Retenção CURTA por contrato: 48h e some — varrida no startup e
+            // a cada 6h (o app mora na bandeja por dias).
+            let shots_dir = dir.join("shots");
+            {
+                let sd = shots_dir.clone();
+                std::thread::spawn(move || loop {
+                    capture::screen::purge_old_shots(&sd, 48 * 3600);
+                    std::thread::sleep(std::time::Duration::from_secs(6 * 3600));
+                });
+            }
+
             // Sobe o sampler de foco e o scheduler de lembretes em background.
-            capture::sampler::spawn(app.handle().clone(), db.clone(), paused, tab_feed);
+            capture::sampler::spawn(app.handle().clone(), db.clone(), paused, tab_feed, shots_dir);
 
             // Auto-teste de OCR: 8s após abrir, OCRa a PRÓPRIA janela uma vez e
             // grava o resultado em settings (ocr_selftest). Diz a VERDADE sobre se o
@@ -224,6 +255,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             get_active_window,
+            open_shot,
             check_accessibility,
             request_accessibility,
             check_screen_recording,

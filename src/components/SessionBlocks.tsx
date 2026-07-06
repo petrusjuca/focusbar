@@ -93,6 +93,15 @@ export function SessionBlocks({
                 {s.activity_ai && <span className="block-app"> · {s.app_name}</span>}
               </span>
               <span className="block-dur">{fmtDuration(s.duration_secs)}</span>
+              {s.shot_path && (
+                <button
+                  className="block-shot"
+                  title="ver screenshot da sessão (some em 48h)"
+                  onClick={() => invoke("open_shot", { path: s.shot_path })}
+                >
+                  📸
+                </button>
+              )}
               <span
                 className="block-dot"
                 style={{

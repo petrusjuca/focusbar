@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { CopyToClaudeButton } from "./CopyToClaudeButton";
 import { OcrSettings } from "./OcrSettings";
 import { McpSettings } from "./McpSettings";
@@ -51,6 +52,23 @@ export function AssistantView({
   onToggleAutostart: () => void;
 }) {
   const [day, setDay] = useState<string | null>(null); // null = hoje
+
+  // D1: screenshots da sessão (retenção 48h) — toggle persistido em settings.
+  const [shots, setShots] = useState(true);
+  useEffect(() => {
+    invoke<string | null>("get_setting", { key: "shots_enabled" })
+      .then((v) => setShots(v !== "0"))
+      .catch(() => {});
+  }, []);
+  async function toggleShots() {
+    const next = !shots;
+    setShots(next);
+    try {
+      await invoke("set_setting", { key: "shots_enabled", value: next ? "1" : "0" });
+    } catch {
+      setShots(!next);
+    }
+  }
 
   return (
     <section className="daily">
@@ -110,9 +128,14 @@ export function AssistantView({
       </div>
 
       <div className="daily-header" style={{ marginTop: "1.5rem" }}>
-        <span>OLHOS (OCR)</span>
+        <span>OLHOS (OCR + SCREENSHOTS)</span>
       </div>
       <OcrSettings />
+      <label className="autostart" style={{ marginTop: "0.5rem", display: "block" }}>
+        <input type="checkbox" checked={shots} onChange={toggleShots} />
+        salvar screenshot da sessão (local, some em 48h) — o "ver em que aba
+        estava" · 📸 nos blocos do dia
+      </label>
 
       <div className="daily-header" style={{ marginTop: "1.5rem" }}>
         <span>GERAL</span>
