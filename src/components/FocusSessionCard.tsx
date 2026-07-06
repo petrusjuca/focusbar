@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { fmtClock, parseDuration } from "../format";
 import type { FocusSessionApi } from "../hooks/useFocusSession";
 import { TimerRing } from "./TimerRing";
+import { EditableClock } from "./EditableClock";
 
 // Card do Modo Foco — fluxo do mundo real: foco → overtime (conta pra tarefa) →
 // pausa → pós-pausa. Cada transição é confirmada por você, nada automático.
@@ -121,7 +122,11 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
                 : 0
           }
         >
-          <div className="session-clock">{clock}</div>
+          <EditableClock
+            text={clock}
+            className="session-clock"
+            onRetime={session.retime}
+          />
         </TimerRing>
       </div>
       {isOver && (

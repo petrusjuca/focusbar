@@ -24,7 +24,6 @@ import { SelfCheck } from "./components/SelfCheck";
 import { Onboarding } from "./components/Onboarding";
 import { DayRituals } from "./components/DayRituals";
 import { MetricsPanel } from "./components/MetricsPanel";
-import { DiaryView } from "./components/DiaryView";
 import { TodoView } from "./components/TodoView";
 import { FocusBar } from "./components/FocusBar";
 import { CopyToClaudeButton } from "./components/CopyToClaudeButton";
@@ -558,7 +557,8 @@ function App() {
 
           {showDetails && (
             <>
-              <DiaryView />
+              {/* (Diário/nota rápida REMOVIDO — decisão D3/#14: anotação vive
+                  fora do focusbar; a intenção do dia continua no ritual.) */}
               <CopyToClaudeButton />
               {summary && (
                 <Suspense fallback={chartFallback}>

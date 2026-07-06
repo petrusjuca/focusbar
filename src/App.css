@@ -850,6 +850,9 @@ h1 {
   top: 0;
   height: 100%;
   border-radius: 2px;
+  /* Uma cor só = a MESMA da legenda "foco" (Rev4 #18: acabou a mistura de
+     cor-por-app com cor-por-estado). */
+  background: #34c759;
 }
 
 /* Faixas de "gap": cada minuto tem dono (pausado / ausente / sem-dados). O
@@ -2738,4 +2741,30 @@ html[data-theme="light"] .agent {
 }
 .other-alert .grant-btn {
   flex-shrink: 0;
+}
+
+/* Relógio clicável (digitar tempo novo, estilo Google) */
+.clock-edit {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: text;
+  border-radius: 8px;
+}
+.clock-edit:hover {
+  outline: 1px dashed var(--border);
+  outline-offset: 4px;
+}
+.clock-input {
+  width: 7ch;
+  text-align: center;
+  background: var(--bg);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  color: var(--text);
+  font-size: 1.4rem;
+  font-variant-numeric: tabular-nums;
+  padding: 0.15rem 0.3rem;
 }

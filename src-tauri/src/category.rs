@@ -11,6 +11,7 @@ const RULES: &[(&str, &[&str])] = &[
             "proxy", "adspower", "notion", "planilha", "sheets", "docs", "slides",
             "meet", "zoom", "gmail", "outlook", "mail", "calendar", "drive",
             "linear", "jira", "trello", "asana", "slack",
+            "miro", "canva",
             // Windows / Office nativo
             "excel", "word", "winword", "powerpoint", "powerpnt", "msoffice",
             "access", "visio", "onenote", "teams",
@@ -22,6 +23,13 @@ const RULES: &[(&str, &[&str])] = &[
             "vscode", "visual studio code", "code", "terminal", "iterm", "xcode",
             "github", "gitlab", "localhost", "cargo", "npm", "focusbar", "figma",
             "postman", "docker", "warp",
+            // IAs de trabalho e criação (identificar > cair em "Outro")
+            "claude", "chatgpt", "gemini", "copilot", "cursor",
+            // Criação: jogos, 3D, mídia — "roblox studio" ANTES da regra
+            // "roblox" (Procrastinação): quem cria não está jogando.
+            "roblox studio", "sketchfab", "blender", "unity", "unreal",
+            "godot", "photoshop", "premiere", "after effects", "davinci",
+            "obs", "audacity",
             // Windows nativo
             "notepad", "notepad++", "powershell", "cmd", "command prompt",
             "explorer", "visual studio", "rider", "intellij", "sublime", "wsl",
@@ -100,6 +108,17 @@ mod tests {
     #[test]
     fn matching_is_case_insensitive() {
         assert_eq!(categorize("DISCORD", ""), "Procrastinação");
+    }
+
+    #[test]
+    fn roblox_studio_e_criacao_nao_e_procrastinacao() {
+        // "roblox studio" (Ferramenta, chave composta) vence "roblox"
+        // (Procrastinação): criar jogo ≠ jogar.
+        assert_eq!(categorize("Roblox Studio", "MeuJogo.rbxl"), "Ferramenta");
+        assert_eq!(categorize("Roblox", "jogando adopt me"), "Procrastinação");
+        assert_eq!(categorize("Sketchfab", "modelo 3d"), "Ferramenta");
+        assert_eq!(categorize("Miro", "quadro do projeto"), "Trabalho");
+        assert_eq!(categorize("Claude", "conversa"), "Ferramenta");
     }
 
     #[test]

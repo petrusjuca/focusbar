@@ -1,5 +1,19 @@
 # focusbar — o que mudou
 
+## v0.8.1 — timer clicável, timeline com UMA linguagem de cor, diário fora
+- **Clica no relógio e digita o tempo** (igual o timer do Google): "10",
+  "1h30", "25:00" — Enter e o restante vira exatamente isso, no mini e no
+  card. Funciona até no overtime (ganha um novo fôlego) e na pausa.
+- **Cores da timeline consertadas (Rev4 #18):** era DOIS sistemas misturados
+  (cor aleatória por app × legenda por estado). Agora é um só: verde = foco,
+  listrado = pausado, âmbar = ausente, trilho = sem dados — a legenda sempre
+  visível e batendo com o que você vê. Quem diz o app é o tooltip e os blocos.
+- **Diário/nota rápida REMOVIDO** (decisão D3 / item #14 do João): anotação
+  vive fora do focusbar; a intenção do dia continua no ritual da manhã.
+- **Identifica mais coisa sozinho:** Roblox Studio, Sketchfab, Blender, Unity
+  (criar ≠ jogar), Claude/ChatGPT/Cursor, Miro e Canva não caem mais em
+  "Outro"/"Procrastinação" por engano.
+
 ## v0.8.0 — timer do Google + revisão do "Outro"
 - **Anel de progresso estilo timer do Google** (pedido do João, Rev4 #3): o
   círculo esvazia conforme o tempo passa, dígitos grandes no centro — no mini

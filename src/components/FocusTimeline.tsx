@@ -1,23 +1,10 @@
 import type { FocusSession, IntervalMarker } from "../types";
 import { fmtDuration, fmtTime } from "../format";
 
-const COLORS = [
-  "#007aff",
-  "#34c759",
-  "#ff9500",
-  "#af52de",
-  "#ff2d55",
-  "#5ac8fa",
-  "#ffcc00",
-];
-
-// Cor estável por nome de app.
-function colorFor(name: string): string {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) | 0;
-  return COLORS[Math.abs(h) % COLORS.length];
-}
-
+// Rev4 #18: a timeline tinha DOIS sistemas de cor misturados — segmento com
+// cor aleatória por app × legenda por ESTADO. Agora é um só, o do FLOWMODE:
+// foco (verde) · pausado (listrado cinza) · ausente (âmbar) · sem dados
+// (trilho). Quem diz O QUE você fazia é o tooltip e a lista de blocos.
 const GAP_LABEL: Record<string, string> = {
   paused: "Monitoramento pausado",
   away: "Ausente",
@@ -46,8 +33,6 @@ export function FocusTimeline({
   const first = Math.min(...starts);
   const lastEnd = Math.max(...ends);
   const span = Math.max(1, lastEnd - first);
-
-  const hasGaps = markers.length > 0;
 
   return (
     <section className="timeline">
@@ -85,21 +70,18 @@ export function FocusTimeline({
               style={{
                 left: `${left}%`,
                 width: `${width}%`,
-                background: colorFor(s.app_name),
                 opacity: s.was_idle_trimmed ? 0.45 : 1,
               }}
             />
           );
         })}
       </div>
-      {hasGaps && (
-        <div className="ribbon-legend">
-          <span><i className="lg lg-work" /> foco</span>
-          <span><i className="lg lg-paused" /> pausado</span>
-          <span><i className="lg lg-away" /> ausente</span>
-          <span><i className="lg lg-nodata" /> sem dados</span>
-        </div>
-      )}
+      <div className="ribbon-legend">
+        <span><i className="lg lg-work" /> foco</span>
+        <span><i className="lg lg-paused" /> pausado</span>
+        <span><i className="lg lg-away" /> ausente</span>
+        <span><i className="lg lg-nodata" /> sem dados</span>
+      </div>
     </section>
   );
 }

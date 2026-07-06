@@ -74,6 +74,7 @@ export interface FocusSessionApi {
   skipBreak: () => void; // pula a pausa → idle (conta como pulada)
   startNext: (seconds?: number, goal?: string) => void; // novo bloco (reusa a duração)
   extend: (minutes: number) => void; // soma tempo ao bloco/pausa em andamento
+  retime: (seconds: number) => void; // REDEFINE o restante (clicou no relógio e digitou, estilo Google)
 }
 
 export function useFocusSession(): FocusSessionApi {
@@ -406,6 +407,43 @@ export function useFocusSession(): FocusSessionApi {
     persist();
   }
 
+  // Clicou no relógio e digitou um tempo novo (estilo timer do Google): o
+  // RESTANTE vira exatamente o que você digitou. O que já correu continua
+  // contando pra tarefa (planned = consumido + novo restante).
+  function retime(seconds: number) {
+    const secs = Math.round(seconds);
+    if (secs <= 0) return;
+    const p = phaseRef.current;
+    if (p === "focus") {
+      plannedRef.current = focusConsumed() + secs;
+      if (bpRef.current) {
+        frozenRef.current = secs;
+      } else {
+        endsAtRef.current = Date.now() + secs * 1000;
+      }
+    } else if (p === "overtime") {
+      // ganha um novo restante; o overtime corrido vira parte do plano.
+      plannedRef.current += overSecs() + secs;
+      endsAtRef.current = Date.now() + secs * 1000;
+      setOver(0);
+      setPhase("focus");
+    } else if (p === "break" || p === "break_over") {
+      const rem =
+        p === "break"
+          ? Math.max(0, Math.round((endsAtRef.current - Date.now()) / 1000))
+          : 0;
+      breakTotalRef.current = Math.max(1, breakTotalRef.current - rem + secs);
+      endsAtRef.current = Date.now() + secs * 1000;
+      if (p === "break_over") {
+        setOver(0);
+        setPhase("break");
+      }
+    } else {
+      return;
+    }
+    persist();
+  }
+
   return {
     phase,
     remaining,
@@ -426,5 +464,6 @@ export function useFocusSession(): FocusSessionApi {
     skipBreak,
     startNext,
     extend,
+    retime,
   };
 }
