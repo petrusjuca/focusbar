@@ -12,12 +12,24 @@ fn now_ts() -> i64 {
 }
 
 #[tauri::command]
-pub fn add_todo(state: State<AppState>, text: String) -> Result<i64, String> {
+pub fn add_todo(
+    state: State<AppState>,
+    text: String,
+    custom_secs: Option<i64>,
+    est_pomos: Option<i64>,
+) -> Result<i64, String> {
     if text.trim().is_empty() {
         return Err("texto vazio".into());
     }
     let conn = state.db.lock().map_err(|e| e.to_string())?;
-    db::todos::add(&conn, text.trim(), now_ts()).map_err(|e| e.to_string())
+    db::todos::add(
+        &conn,
+        text.trim(),
+        now_ts(),
+        custom_secs.filter(|s| *s > 0),
+        est_pomos.filter(|p| *p > 0),
+    )
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

@@ -22,6 +22,9 @@ pub fn open(path: &Path) -> rusqlite::Result<Connection> {
         "ALTER TABLE focus_events ADD COLUMN shot_path TEXT",
         "ALTER TABLE focus_events ADD COLUMN category_ai TEXT",
         "ALTER TABLE focus_events ADD COLUMN activity_ai TEXT",
+        "ALTER TABLE todos ADD COLUMN custom_secs INTEGER",
+        "ALTER TABLE todos ADD COLUMN est_pomos INTEGER",
+        "ALTER TABLE reminders ADD COLUMN snoozed_until INTEGER",
     ] {
         let _ = conn.execute(col, []);
     }
@@ -104,7 +107,8 @@ pub(crate) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
             cron          TEXT,
             enabled       INTEGER NOT NULL DEFAULT 1,
             last_fired_ts INTEGER,
-            created_at    INTEGER NOT NULL
+            created_at    INTEGER NOT NULL,
+            snoozed_until INTEGER  -- chega-por-hoje (lembretes v2)
         );
 
         CREATE TABLE IF NOT EXISTS settings (
@@ -153,11 +157,13 @@ pub(crate) fn migrate(conn: &Connection) -> rusqlite::Result<()> {
         );
 
         CREATE TABLE IF NOT EXISTS todos (
-            id         INTEGER PRIMARY KEY,
-            text       TEXT NOT NULL,
-            done       INTEGER NOT NULL DEFAULT 0,
-            created_at INTEGER NOT NULL,
-            done_at    INTEGER
+            id          INTEGER PRIMARY KEY,
+            text        TEXT NOT NULL,
+            done        INTEGER NOT NULL DEFAULT 0,
+            created_at  INTEGER NOT NULL,
+            done_at     INTEGER,
+            custom_secs INTEGER, -- duracao propria da tarefa (Rev4 #5)
+            est_pomos   INTEGER  -- estimativa em pomodoros
         );
 
         CREATE TABLE IF NOT EXISTS notes (

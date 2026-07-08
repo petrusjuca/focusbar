@@ -4,6 +4,7 @@ import { fmtClock, parseDuration } from "../format";
 import type { FocusSessionApi } from "../hooks/useFocusSession";
 import { TimerRing } from "./TimerRing";
 import { EditableClock } from "./EditableClock";
+import { EditableGoal } from "./EditableGoal";
 
 // Card do Modo Foco — fluxo do mundo real: foco → overtime (conta pra tarefa) →
 // pausa → pós-pausa. Cada transição é confirmada por você, nada automático.
@@ -58,7 +59,9 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
           </span>
         </div>
         <p className="session-card-sub">
-          Um bloco protegido — eu cuido do tempo e te lembro da pausa.
+          Um bloco protegido — eu cuido do tempo e te lembro da pausa. Sem
+          tarefa escolhida vale igual: vira um <b>pomodoro neutro</b> (dá pra
+          nomear depois, clicando no 🎯).
         </p>
         <div className="session-card-actions">
           <button className="grant-btn" onClick={() => begin(25 * 60)}>
@@ -110,7 +113,16 @@ export function FocusSessionCard({ session }: { session: FocusSessionApi }) {
         <span className="session-card-title">{title}</span>
         <span className="pomos" title="pomodoros concluídos hoje">🍅 {pomodoros}</span>
       </div>
-      {(isFocus || isOver) && goal && <div className="session-goal">🎯 {goal}</div>}
+      {(isFocus || isOver) && goal && (
+        <EditableGoal goal={goal} onRename={session.rename} className="session-goal" />
+      )}
+      {(isFocus || isOver) && !goal && (
+        <EditableGoal
+          goal="pomodoro neutro — clique pra nomear"
+          onRename={session.rename}
+          className="session-goal neutral"
+        />
+      )}
       <div className="session-ring">
         <TimerRing
           size={140}

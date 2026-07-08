@@ -13,11 +13,12 @@ fn map_row(r: &rusqlite::Row) -> rusqlite::Result<Reminder> {
         enabled: r.get::<_, i64>(5)? != 0,
         last_fired_ts: r.get(6)?,
         created_at: r.get(7)?,
+        snoozed_until: r.get(8)?,
     })
 }
 
 const COLS: &str =
-    "id, text, kind, fire_at, interval_secs, enabled, last_fired_ts, created_at";
+    "id, text, kind, fire_at, interval_secs, enabled, last_fired_ts, created_at, snoozed_until";
 
 pub fn create(
     conn: &Connection,
@@ -69,6 +70,15 @@ pub fn mark_fired(conn: &Connection, id: i64, now: i64, disable: bool) -> rusqli
         "UPDATE reminders SET last_fired_ts = ?2, enabled = CASE WHEN ?3 THEN 0 ELSE enabled END
          WHERE id = ?1",
         params![id, now, disable as i64],
+    )?;
+    Ok(())
+}
+
+/// "Chega por hoje": silencia o lembrete até `until_ts` (meia-noite local).
+pub fn snooze_until(conn: &Connection, id: i64, until_ts: i64) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE reminders SET snoozed_until = ?2 WHERE id = ?1",
+        params![id, until_ts],
     )?;
     Ok(())
 }

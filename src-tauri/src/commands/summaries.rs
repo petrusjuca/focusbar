@@ -279,3 +279,64 @@ mod tests {
         assert_eq!(label, "2026-03-09");
     }
 }
+
+/// Comparação da SEMANA CIVIL (seg–dom) com a anterior — FLOWMODE, análise da
+/// semana "possibilidade 2": a comparação evolui ao longo da semana. Comparamos
+/// o trecho JÁ VIVIDO desta semana com o MESMO trecho da anterior (maçãs com
+/// maçãs: quarta-feira compara seg–qua × seg–qua), e também a anterior inteira.
+#[derive(serde::Serialize)]
+pub struct WeekCompare {
+    pub this_start: String,     // segunda desta semana (YYYY-MM-DD)
+    pub this_secs: i64,         // total focado nesta semana até agora
+    pub prev_same_span_secs: i64, // mesmo trecho da semana passada
+    pub prev_full_secs: i64,    // semana passada inteira
+    pub this_by_cat: Vec<CategoryTotal>,
+    pub prev_by_cat: Vec<CategoryTotal>, // mesmo trecho da anterior
+}
+
+#[tauri::command]
+pub fn get_week_compare(state: State<AppState>) -> Result<WeekCompare, String> {
+    use chrono::Datelike;
+    let today = Local::now().date_naive();
+    let monday = today - Duration::days(today.weekday().num_days_from_monday() as i64);
+    let prev_monday = monday - Duration::days(7);
+    let now = Local::now().timestamp();
+
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    let overrides = db::category_overrides(&conn).map_err(|e| e.to_string())?;
+
+    // Soma total + por categoria efetiva de um intervalo [start, end).
+    let sum = |start: i64, end: i64| -> Result<(i64, Vec<CategoryTotal>), String> {
+        let sessions = db::sessions_in_range(&conn, start, end).map_err(|e| e.to_string())?;
+        let mut total = 0i64;
+        let mut cats: HashMap<String, i64> = HashMap::new();
+        for s in &sessions {
+            total += s.duration_secs;
+            let cat = effective(&overrides, &s.app_name, &s.title);
+            *cats.entry(cat).or_insert(0) += s.duration_secs;
+        }
+        let mut v: Vec<CategoryTotal> = cats
+            .into_iter()
+            .map(|(category, total_secs)| CategoryTotal { category, total_secs })
+            .collect();
+        v.sort_by_key(|c| std::cmp::Reverse(c.total_secs));
+        Ok((total, v))
+    };
+
+    let this_start_ts = day_start_ts(monday);
+    let prev_start_ts = day_start_ts(prev_monday);
+    // Trecho equivalente da semana passada: mesmo deslocamento desde a segunda.
+    let elapsed = now - this_start_ts;
+    let (this_secs, this_by_cat) = sum(this_start_ts, now)?;
+    let (prev_same_span_secs, prev_by_cat) = sum(prev_start_ts, prev_start_ts + elapsed)?;
+    let (prev_full_secs, _) = sum(prev_start_ts, this_start_ts)?;
+
+    Ok(WeekCompare {
+        this_start: monday.format("%Y-%m-%d").to_string(),
+        this_secs,
+        prev_same_span_secs,
+        prev_full_secs,
+        this_by_cat,
+        prev_by_cat,
+    })
+}

@@ -3,10 +3,17 @@
 use crate::models::Todo;
 use rusqlite::{params, Connection};
 
-pub fn add(conn: &Connection, text: &str, created_at: i64) -> rusqlite::Result<i64> {
+pub fn add(
+    conn: &Connection,
+    text: &str,
+    created_at: i64,
+    custom_secs: Option<i64>,
+    est_pomos: Option<i64>,
+) -> rusqlite::Result<i64> {
     conn.execute(
-        "INSERT INTO todos(text, done, created_at) VALUES (?1, 0, ?2)",
-        params![text, created_at],
+        "INSERT INTO todos(text, done, created_at, custom_secs, est_pomos)
+         VALUES (?1, 0, ?2, ?3, ?4)",
+        params![text, created_at, custom_secs, est_pomos],
     )?;
     Ok(conn.last_insert_rowid())
 }
@@ -14,7 +21,7 @@ pub fn add(conn: &Connection, text: &str, created_at: i64) -> rusqlite::Result<i
 /// Abertas primeiro (mais novas no topo); feitas depois (mais recentes no topo).
 pub fn list(conn: &Connection) -> rusqlite::Result<Vec<Todo>> {
     let mut stmt = conn.prepare(
-        "SELECT id, text, done, created_at, done_at FROM todos
+        "SELECT id, text, done, created_at, done_at, custom_secs, est_pomos FROM todos
          ORDER BY done ASC, COALESCE(done_at, created_at) DESC",
     )?;
     let rows = stmt.query_map([], |r| {
@@ -24,6 +31,8 @@ pub fn list(conn: &Connection) -> rusqlite::Result<Vec<Todo>> {
             done: r.get::<_, i64>(2)? != 0,
             created_at: r.get(3)?,
             done_at: r.get(4)?,
+            custom_secs: r.get(5)?,
+            est_pomos: r.get(6)?,
         })
     })?;
     rows.collect()

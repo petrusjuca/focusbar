@@ -1,5 +1,24 @@
 # focusbar — o que mudou
 
+## v0.10.0 — o batch do checklist: 🍅 por tarefa, renomear em andamento, Relógio Xadrez e mais
+- **Tarefa com tempo próprio + estimativa 🍅 (Rev4 #5):** ao criar a tarefa você
+  diz "leva 30min" e "2 🍅" — o ▶ focar usa O TEMPO DELA, não um 25min cravado.
+- **Renomear o pomodoro EM ANDAMENTO (Rev4 #10):** clica no 🎯, digita, Enter —
+  o tempo nem pisca. Vale no card e no mini.
+- **Pomodoro neutro claro (Rev4 #11):** sem tarefa escolhida o bloco vale
+  igual, dizemos isso na cara, e dá pra nomear depois clicando no 🎯.
+- **♟️ Relógio Xadrez (ideia do Petrus):** dois relógios com a mesma meta
+  (padrão 4h, configurável) — produtividade × distração. Vença o seu dia.
+- **Análise da Semana (seg–dom) × semana anterior:** compara o MESMO trecho já
+  vivido ("quarta × quarta") + a anterior inteira + a maior mudança por
+  categoria. A comparação evolui com a semana.
+- **Lembretes v2:** o aviso agora FICA NA TELA até você resolver — com
+  "✓ feito" e "chega por hoje" (silencia até amanhã, volta sozinho).
+- **Fim de dia no SEU horário:** o "acabou por hoje?" tem hora configurável em
+  Configurações (era 18h cravado).
+- **Insights por regra saíram do Hoje (Rev4 #13):** o "maior ladrão" e cia.
+  agora vivem no recap do Claude via MCP — com contexto, não com regrinha.
+
 ## v0.9.0 — screenshots com retenção curta (decisão D1 executada)
 - **"Ver em que aba estava" existe agora:** o app salva UM screenshot por
   sessão estável (a mesma captura que alimenta o OCR — nada de fotografar

@@ -70,6 +70,26 @@ export function AssistantView({
     }
   }
 
+  // Ritual de fim de dia: horário configurável (antes era 18h cravado).
+  const [eodHour, setEodHour] = useState(18);
+  useEffect(() => {
+    invoke<string | null>("get_setting", { key: "eod_hour" })
+      .then((v) => {
+        const n = v ? parseInt(v, 10) : 18;
+        if (!isNaN(n)) setEodHour(n);
+      })
+      .catch(() => {});
+  }, []);
+  async function changeEod(h: number) {
+    if (isNaN(h) || h < 0 || h > 23) return;
+    setEodHour(h);
+    try {
+      await invoke("set_setting", { key: "eod_hour", value: String(h) });
+    } catch {
+      /* ignore */
+    }
+  }
+
   return (
     <section className="daily">
       <div className="daily-header">
@@ -147,6 +167,18 @@ export function AssistantView({
         <label className="autostart">
           <input type="checkbox" checked={autostart} onChange={onToggleAutostart} />
           iniciar com o sistema
+        </label>
+        <label className="autostart" title='horário do ritual "acabou por hoje?"'>
+          fim do dia às{" "}
+          <input
+            className="eod-hour"
+            type="number"
+            min={0}
+            max={23}
+            value={eodHour}
+            onChange={(e) => changeEod(parseInt(e.target.value, 10))}
+          />
+          h
         </label>
       </div>
 

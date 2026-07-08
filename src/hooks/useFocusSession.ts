@@ -75,6 +75,7 @@ export interface FocusSessionApi {
   startNext: (seconds?: number, goal?: string) => void; // novo bloco (reusa a duração)
   extend: (minutes: number) => void; // soma tempo ao bloco/pausa em andamento
   retime: (seconds: number) => void; // REDEFINE o restante (clicou no relógio e digitou, estilo Google)
+  rename: (goal: string) => void; // renomeia o pomodoro EM ANDAMENTO (Rev4 #10)
 }
 
 export function useFocusSession(): FocusSessionApi {
@@ -444,6 +445,14 @@ export function useFocusSession(): FocusSessionApi {
     persist();
   }
 
+  // Renomeia a tarefa do bloco EM ANDAMENTO (Rev4 #10) — o tempo continua.
+  function rename(g: string) {
+    const t = g.trim();
+    if (!t) return;
+    setGoal(t);
+    persist();
+  }
+
   return {
     phase,
     remaining,
@@ -465,5 +474,6 @@ export function useFocusSession(): FocusSessionApi {
     startNext,
     extend,
     retime,
+    rename,
   };
 }

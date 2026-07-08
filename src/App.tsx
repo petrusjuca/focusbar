@@ -8,7 +8,6 @@ import type {
   CategoryTotal,
   DailySummary,
   FocusSession,
-  Insight,
   IntervalMarker,
   WeeklySummary,
 } from "./types";
@@ -16,7 +15,6 @@ import { fmtClock, fmtDuration, fmtTime, friendlyError } from "./format";
 import { FocusTimeline } from "./components/FocusTimeline";
 import { SessionBlocks } from "./components/SessionBlocks";
 import { CategoryBreakdown } from "./components/CategoryBreakdown";
-import { InsightsPanel } from "./components/InsightsPanel";
 import { RemindersView } from "./components/RemindersView";
 import { AssistantView } from "./components/AssistantView";
 import { MiniView } from "./components/MiniView";
@@ -30,6 +28,8 @@ import { CopyToClaudeButton } from "./components/CopyToClaudeButton";
 import { FocusSessionCard } from "./components/FocusSessionCard";
 import { DedicationToday } from "./components/DedicationToday";
 import { useFocusSession } from "./hooks/useFocusSession";
+import { ChessClock } from "./components/ChessClock";
+import { WeekCompareCard } from "./components/WeekCompareCard";
 import "./App.css";
 
 // Lazy: estes usam recharts (pesado) — carregam num chunk separado, sob demanda.
@@ -52,7 +52,6 @@ function App() {
   const [daySessions, setDaySessions] = useState<FocusSession[]>([]);
   const [dayMarkers, setDayMarkers] = useState<IntervalMarker[]>([]);
   const [categories, setCategories] = useState<CategoryTotal[]>([]);
-  const [dayInsights, setDayInsights] = useState<Insight[]>([]);
   const [sessions, setSessions] = useState<FocusSession[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [hasAccess, setHasAccess] = useState<boolean>(true);
@@ -76,18 +75,21 @@ function App() {
   const [showDetails, setShowDetails] = useState<boolean>(false);
   // Revisão guiada do "Outro" (FLOWMODE: meta é Outro < 5% do dia).
   const [reviewOther, setReviewOther] = useState<boolean>(false);
+  // Lembretes v2: o aviso FICA na tela até você resolver (melhor que adiar).
+  const [reminderAlerts, setReminderAlerts] = useState<{ id: number; text: string }[]>([]);
   const session = useFocusSession();
 
   // Tarefa → Foco: define o foco e inicia um bloco Pomodoro JÁ naquela tarefa.
   // Usa a ÚLTIMA duração que você escolheu (não um 25min cravado) — cada tarefa
   // leva o tempo que leva. Dá pra ajustar com +5/−5 ou o campo custom no card.
-  async function focusTask(text: string) {
+  async function focusTask(text: string, secs?: number) {
     try {
       await invoke("set_focus", { text });
     } catch (e) {
       setError(friendlyError(e));
     }
-    const last = Number(localStorage.getItem("focus-last-secs")) || 25 * 60;
+    // Prioridade: duração PRÓPRIA da tarefa (Rev4 #5) > última escolhida.
+    const last = secs || Number(localStorage.getItem("focus-last-secs")) || 25 * 60;
     session.start(last, text);
     setTab("hoje");
   }
@@ -133,13 +135,12 @@ function App() {
     // no evento focus-changed (fim de sessão) + uma rede de segurança a cada 20s.
     async function loadData() {
       try {
-        const [daily, week, dayS, cats, tips, recent, marks] =
+        const [daily, week, dayS, cats, recent, marks] =
           await Promise.all([
             invoke<DailySummary>("get_daily_summary", { day: null }),
             invoke<WeeklySummary>("get_weekly_summary", { endDay: null }),
             invoke<FocusSession[]>("get_day_sessions", { day: null }),
             invoke<CategoryTotal[]>("get_category_summary", { day: null }),
-            invoke<Insight[]>("get_day_insights", { day: null }),
             invoke<FocusSession[]>("get_recent_sessions", { limit: 25 }),
             invoke<IntervalMarker[]>("get_day_markers", { day: null }).catch(
               () => [] as IntervalMarker[]
@@ -150,7 +151,6 @@ function App() {
           setWeekly(week);
           setDaySessions(dayS);
           setCategories(cats);
-          setDayInsights(tips);
           setSessions(recent);
           setDayMarkers(marks);
           setError(null);
@@ -171,6 +171,12 @@ function App() {
       setPaused(e.payload);
       loadData();
     });
+    // Lembrete disparou → aviso persistente na tela (lembretes v2 do FLOWMODE).
+    const unlistenRem = listen<{ id: number; text: string }>("reminder-fired", (e) => {
+      setReminderAlerts((prev) =>
+        prev.some((r) => r.id === e.payload.id) ? prev : [...prev, e.payload]
+      );
+    });
 
     return () => {
       alive = false;
@@ -178,6 +184,7 @@ function App() {
       clearInterval(heavyId);
       unlisten.then((un) => un());
       unlistenPause.then((un) => un());
+      unlistenRem.then((un) => un());
     };
   }, []);
 
@@ -439,6 +446,36 @@ function App() {
         )}
       </div>
 
+      {reminderAlerts.map((r) => (
+        <div className="reminder-alert" key={r.id}>
+          <span>⏰ {r.text}</span>
+          <span className="reminder-alert-actions">
+            <button
+              className="grant-btn"
+              onClick={() =>
+                setReminderAlerts((prev) => prev.filter((x) => x.id !== r.id))
+              }
+            >
+              ✓ feito
+            </button>
+            <button
+              className="link-btn"
+              title="silencia este lembrete até amanhã"
+              onClick={async () => {
+                try {
+                  await invoke("snooze_reminder_today", { id: r.id });
+                } catch {
+                  /* ignore */
+                }
+                setReminderAlerts((prev) => prev.filter((x) => x.id !== r.id));
+              }}
+            >
+              chega por hoje
+            </button>
+          </span>
+        </div>
+      ))}
+
       <div className="tabs">
         <button
           className={tab === "hoje" ? "tab active" : "tab"}
@@ -491,9 +528,12 @@ function App() {
         />
       ) : tab === "semana" ? (
         weekly ? (
-          <Suspense fallback={chartFallback}>
-            <WeeklyView summary={weekly} />
-          </Suspense>
+          <>
+            <WeekCompareCard />
+            <Suspense fallback={chartFallback}>
+              <WeeklyView summary={weekly} />
+            </Suspense>
+          </>
         ) : (
           <div className="loading-state">
             {loaded ? "Ainda sem dados na semana." : "carregando…"}
@@ -506,10 +546,12 @@ function App() {
           {/* Núcleo acionável (TDAH: o que importa AGORA, sem rolagem infinita) */}
           <FocusBar />
           <FocusSessionCard session={session} />
+          <ChessClock categories={categories} />
           {/* (A cascata "intenção → um passo" saiu — decisão FLOWMODE: a
               intenção vive no ritual da manhã e no mini; tarefas vivem aqui.) */}
           <TodoView onFocusTask={focusTask} />
-          <InsightsPanel insights={dayInsights} />
+          {/* (Insights por regra saíram — Rev4 #13: o "maior ladrão" e cia.
+              agora vivem no recap do Claude via MCP, com contexto de verdade.) */}
           <DedicationToday refreshKey={session.pomodoros} />
 
           {/* FLOWMODE: "Outro" acima de 5% = o sistema não sabe onde teu tempo

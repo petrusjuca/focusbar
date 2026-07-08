@@ -2777,3 +2777,60 @@ html[data-theme="light"] .agent {
   font-size: 0.9rem;
   padding: 0 0.2rem;
 }
+
+/* ===== Batch v0.10.0 ===== */
+
+/* Tarefas com tempo próprio + 🍅 (Rev4 #5) */
+.todo-dur { width: 130px; margin-bottom: 0; }
+.todo-pomos { width: 70px; margin-bottom: 0; }
+.todo-meta { opacity: 0.65; font-size: 0.78rem; margin-left: 0.3rem; }
+
+/* Nome do pomodoro clicável (Rev4 #10) */
+.goal-edit {
+  background: none; border: none; padding: 0; color: inherit; font: inherit;
+  cursor: text; border-radius: 6px;
+}
+.goal-edit:hover { outline: 1px dashed var(--border); outline-offset: 3px; }
+.goal-edit.neutral { opacity: 0.6; font-style: italic; }
+.goal-input {
+  background: var(--bg); border: 1px solid var(--accent); border-radius: 6px;
+  color: var(--text); font: inherit; padding: 0.1rem 0.35rem; width: 100%;
+  max-width: 260px; text-align: center;
+}
+
+/* Horário do fim de dia / meta do xadrez */
+.eod-hour {
+  width: 3.2em; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text); padding: 0.1rem 0.25rem;
+  text-align: center; font-variant-numeric: tabular-nums;
+}
+
+/* Lembrete que FICA na tela (lembretes v2) */
+.reminder-alert {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.8rem;
+  border: 1px solid var(--accent); border-radius: 12px; padding: 0.6rem 0.9rem;
+  margin: 0.4rem 0; font-size: 0.9rem;
+}
+.reminder-alert-actions { display: flex; gap: 0.6rem; flex-shrink: 0; }
+
+/* ♟️ Relógio Xadrez */
+.chess-clock { margin: 0.8rem 0; }
+.chess-row { display: flex; align-items: center; gap: 0.6rem; margin: 0.35rem 0; }
+.chess-label { min-width: 7.5rem; font-size: 0.85rem; }
+.chess-track {
+  flex: 1; height: 12px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; overflow: hidden;
+}
+.chess-fill { height: 100%; border-radius: 6px; transition: width 0.6s ease; }
+.chess-row.prod .chess-fill { background: #34c759; }
+.chess-row.bad .chess-fill { background: #ff3b30; }
+.chess-time {
+  min-width: 4.5rem; text-align: right; font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+}
+.chess-verdict { font-size: 0.85rem; opacity: 0.85; margin: 0.4rem 0 0; }
+
+/* Comparação da semana civil */
+.week-compare { margin-bottom: 1rem; }
+.week-compare-main { font-size: 0.95rem; margin: 0.4rem 0; }
+.week-compare-sub { font-size: 0.82rem; opacity: 0.75; margin: 0.2rem 0; }

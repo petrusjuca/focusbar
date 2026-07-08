@@ -30,6 +30,10 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>) {
         if let Ok(conn) = db.lock() {
             if let Ok(list) = db::reminders::enabled(&conn) {
                 for r in list {
+                    // "Chega por hoje": silenciado até a meia-noite — pula.
+                    if r.snoozed_until.is_some_and(|s| now < s) {
+                        continue;
+                    }
                     let due = match r.kind.as_str() {
                         "once" => r.last_fired_ts.is_none() && r.fire_at.map_or(false, |t| now >= t),
                         "recurring" => {
@@ -57,7 +61,9 @@ pub fn spawn(app: AppHandle, db: Arc<Mutex<Connection>>) {
             if let Ok(conn) = db.lock() {
                 let _ = db::reminders::mark_fired(&conn, id, now, disable);
             }
-            let _ = app.emit("reminder-fired", &text);
+            // Payload com id: a UI mostra o aviso que FICA na tela, com
+            // "feito" / "chega por hoje" (silencia até amanhã) — lembretes v2.
+            let _ = app.emit("reminder-fired", serde_json::json!({ "id": id, "text": text }));
         }
 
         thread::sleep(Duration::from_secs(TICK_SECS));

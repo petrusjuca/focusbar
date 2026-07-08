@@ -22,9 +22,13 @@ export function useTodos(pollMs = 0) {
     }
   }, [pollMs]);
 
-  async function add(text: string) {
+  async function add(text: string, customSecs?: number, estPomos?: number) {
     if (!text.trim()) return;
-    await invoke("add_todo", { text: text.trim() });
+    await invoke("add_todo", {
+      text: text.trim(),
+      customSecs: customSecs ?? null,
+      estPomos: estPomos ?? null,
+    });
     refresh();
   }
   async function toggle(id: number) {

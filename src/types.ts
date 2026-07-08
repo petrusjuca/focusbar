@@ -94,6 +94,8 @@ export interface Todo {
   done: boolean;
   created_at: number;
   done_at: number | null;
+  custom_secs: number | null; // duração própria da tarefa (Rev4 #5)
+  est_pomos: number | null; // estimativa em 🍅
 }
 
 export interface FocusCheck {

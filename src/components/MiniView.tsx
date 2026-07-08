@@ -8,6 +8,7 @@ import { fmtClock } from "../format";
 import { useTodos } from "../hooks/useTodos";
 import { TimerRing } from "./TimerRing";
 import { EditableClock } from "./EditableClock";
+import { EditableGoal } from "./EditableGoal";
 
 const CARD_W = 268;
 
@@ -240,9 +241,11 @@ export function MiniView({
               />
             </TimerRing>
             {(isFocus || isOver) && focus && (
-              <div className="agent-focus" title={focus}>
-                {focus}
-              </div>
+              <EditableGoal
+                goal={focus}
+                onRename={session.rename}
+                className="agent-focus"
+              />
             )}
             <div className="agent-timer-ctrl">
               {timerActions.map((a, i) => (

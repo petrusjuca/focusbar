@@ -131,6 +131,10 @@ pub struct Todo {
     pub done: bool,
     pub created_at: i64,
     pub done_at: Option<i64>,
+    /// Duração própria da tarefa em segundos (tarefas de 10min ≠ de 90min).
+    pub custom_secs: Option<i64>,
+    /// Estimativa em pomodoros ("isso leva 2 🍅") — Rev4 #5.
+    pub est_pomos: Option<i64>,
 }
 
 /// Um lembrete. `kind`: "once" (dispara uma vez em fire_at) ou
@@ -145,4 +149,6 @@ pub struct Reminder {
     pub enabled: bool,
     pub last_fired_ts: Option<i64>,
     pub created_at: i64,
+    /// "Chega por hoje": silenciado até este ts (lembretes v2).
+    pub snoozed_until: Option<i64>,
 }

@@ -1,6 +1,7 @@
 use crate::db;
 use crate::models::Reminder;
 use crate::state::AppState;
+use chrono::{Duration as ChDuration, Local, TimeZone};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
 
@@ -48,4 +49,18 @@ pub fn set_reminder_enabled(
 pub fn delete_reminder(state: State<AppState>, id: i64) -> Result<(), String> {
     let conn = state.db.lock().map_err(|e| e.to_string())?;
     db::reminders::delete(&conn, id).map_err(|e| e.to_string())
+}
+
+/// "Chega por hoje": silencia o lembrete até a próxima meia-noite LOCAL —
+/// amanhã ele volta sozinho (lembretes v2 do FLOWMODE).
+#[tauri::command]
+pub fn snooze_reminder_today(state: State<AppState>, id: i64) -> Result<(), String> {
+    let tomorrow = Local::now().date_naive() + ChDuration::days(1);
+    let midnight = tomorrow
+        .and_hms_opt(0, 0, 0)
+        .and_then(|n| Local.from_local_datetime(&n).earliest())
+        .map(|t| t.timestamp())
+        .unwrap_or_else(|| now_ts() + 24 * 3600);
+    let conn = state.db.lock().map_err(|e| e.to_string())?;
+    db::reminders::snooze_until(&conn, id, midnight).map_err(|e| e.to_string())
 }

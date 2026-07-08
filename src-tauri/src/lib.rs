@@ -31,11 +31,12 @@ use commands::permissions::{
 };
 use commands::reminders::{
     create_reminder, delete_reminder, list_reminders, set_reminder_enabled,
+    snooze_reminder_today,
 };
 use commands::sessions::{delete_app_sessions, delete_session, get_recent_sessions};
 use commands::summaries::{
     get_category_summary, get_daily_summary, get_day_insights, get_day_markers, get_day_sessions,
-    get_metrics, get_weekly_summary, set_app_category, set_block_category,
+    get_metrics, get_week_compare, get_weekly_summary, set_app_category, set_block_category,
 };
 use models::ActiveWindow;
 use state::AppState;
@@ -273,6 +274,8 @@ pub fn run() {
             create_reminder,
             set_reminder_enabled,
             delete_reminder,
+            snooze_reminder_today,
+            get_week_compare,
             get_autostart,
             set_autostart,
             get_paused,
